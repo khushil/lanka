@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5-enterprise
+    container_name: lanka-neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7473:7473"  # HTTPS
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/lanka2025
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
+      - NEO4J_dbms_connector_bolt_enabled=true
+      - NEO4J_dbms_connector_http_enabled=true
+      - NEO4J_dbms_connector_https_enabled=true
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+    networks:
+      - lanka-network
+
+  mongodb:
+    image: mongo:7
+    container_name: lanka-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=lanka
+      - MONGO_INITDB_ROOT_PASSWORD=lanka2025
+      - MONGO_INITDB_DATABASE=lanka
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - lanka-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: lanka-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - lanka-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+    container_name: lanka-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - lanka-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.3
+    container_name: lanka-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - lanka-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.3
+    container_name: lanka-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - lanka-network
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
+  mongodb_data:
+  redis_data:
+  elasticsearch_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_logs:
+
+networks:
+  lanka-network:
+    driver: bridge
