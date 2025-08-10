@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+coverage/
+*.tsbuildinfo
+
+# Generated files
+coordination/
+memory/
+logs/
+
+# Claude Flow generated files
+claude-flow*
+.swarm/
+.hive-mind/
+
+# Lock files
+package-lock.json
+yarn.lock
+
+# Environment files
+.env*
+
+# Documentation that shouldn't be formatted
+CHANGELOG.md

@@ -1,0 +1,1003 @@
+{
+  "info": {
+    "name": "LANKA Architecture Intelligence API",
+    "description": "Comprehensive API collection for LANKA Requirements and Architecture Intelligence platform",
+    "version": "2.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bearer_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-refresh token if expired",
+          "const tokenExpiry = pm.environment.get('token_expiry');",
+          "const currentTime = Date.now();",
+          "",
+          "if (!tokenExpiry || currentTime >= tokenExpiry - 60000) {",
+          "  // Token expired or expires within 1 minute",
+          "  const refreshToken = pm.environment.get('refresh_token');",
+          "  ",
+          "  if (refreshToken) {",
+          "    pm.sendRequest({",
+          "      url: pm.environment.get('base_url') + '/auth/refresh',",
+          "      method: 'POST',",
+          "      header: {",
+          "        'Content-Type': 'application/json'",
+          "      },",
+          "      body: {",
+          "        mode: 'raw',",
+          "        raw: JSON.stringify({ refreshToken: refreshToken })",
+          "      }",
+          "    }, (err, res) => {",
+          "      if (!err && res.json()) {",
+          "        const authData = res.json();",
+          "        pm.environment.set('bearer_token', authData.accessToken);",
+          "        pm.environment.set('token_expiry', Date.now() + (authData.expiresIn * 1000));",
+          "      }",
+          "    });",
+          "  }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test scripts",
+          "pm.test('Response time is less than 5000ms', () => {",
+          "  pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});",
+          "",
+          "pm.test('Response has correct content type', () => {",
+          "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "});",
+          "",
+          "// Store request ID for debugging",
+          "if (pm.response.json() && pm.response.json().requestId) {",
+          "  pm.environment.set('last_request_id', pm.response.json().requestId);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.lanka.ai/v2",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "Authentication and token management endpoints",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"rememberMe\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains access token', () => {",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('accessToken');",
+                  "  pm.expect(jsonData).to.have.property('refreshToken');",
+                  "  pm.expect(jsonData).to.have.property('expiresIn');",
+                  "});",
+                  "",
+                  "// Store tokens for subsequent requests",
+                  "if (pm.response.code === 200) {",
+                  "  const authData = pm.response.json();",
+                  "  pm.environment.set('bearer_token', authData.accessToken);",
+                  "  pm.environment.set('refresh_token', authData.refreshToken);",
+                  "  pm.environment.set('token_expiry', Date.now() + (authData.expiresIn * 1000));",
+                  "  pm.environment.set('user_id', authData.user.id);",
+                  "  pm.environment.set('organization_id', authData.organization.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Clear stored tokens",
+                  "pm.environment.unset('bearer_token');",
+                  "pm.environment.unset('refresh_token');",
+                  "pm.environment.unset('token_expiry');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('API is healthy', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const jsonData = pm.response.json();",
+              "  pm.expect(jsonData.status).to.eql('healthy');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Requirements",
+      "description": "Requirements management endpoints",
+      "item": [
+        {
+          "name": "List Requirements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/requirements?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["requirements"],
+              "query": [
+                {
+                  "key": "projectId",
+                  "value": "{{project_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "FUNCTIONAL",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "APPROVED",
+                  "disabled": true
+                },
+                {
+                  "key": "priority",
+                  "value": "HIGH",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "search",
+                  "value": "authentication",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Requirement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"User Authentication System\",\n  \"description\": \"The system must provide secure user authentication with support for multi-factor authentication, password policies, and session management.\",\n  \"type\": \"FUNCTIONAL\",\n  \"priority\": \"HIGH\",\n  \"projectId\": \"{{project_id}}\",\n  \"stakeholderId\": \"{{user_id}}\",\n  \"acceptanceCriteria\": [\n    \"User can login with email and password\",\n    \"System enforces strong password policy\",\n    \"Failed login attempts are logged\",\n    \"Multi-factor authentication is supported\"\n  ],\n  \"businessValue\": \"Enables secure access to the platform, protecting user data and maintaining compliance with security standards\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/requirements",
+              "host": ["{{base_url}}"],
+              "path": ["requirements"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Requirement created successfully', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('requirement');",
+                  "  pm.expect(jsonData).to.have.property('analysis');",
+                  "});",
+                  "",
+                  "// Store created requirement ID",
+                  "if (pm.response.code === 201) {",
+                  "  const responseData = pm.response.json();",
+                  "  pm.environment.set('requirement_id', responseData.requirement.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Requirement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/requirements/{{requirement_id}}?include=mappings,recommendations,conflicts,similar",
+              "host": ["{{base_url}}"],
+              "path": ["requirements", "{{requirement_id}}"],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "mappings,recommendations,conflicts,similar"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Requirement",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Enhanced User Authentication System\",\n  \"description\": \"The system must provide secure user authentication with support for multi-factor authentication, password policies, session management, and single sign-on integration.\",\n  \"status\": \"APPROVED\",\n  \"priority\": \"HIGH\",\n  \"acceptanceCriteria\": [\n    \"User can login with email and password\",\n    \"System enforces strong password policy\",\n    \"Failed login attempts are logged\",\n    \"Multi-factor authentication is supported\",\n    \"SSO integration with corporate identity providers\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/requirements/{{requirement_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["requirements", "{{requirement_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Find Similar Requirements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/requirements/{{requirement_id}}/similar?threshold=0.7&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["requirements", "{{requirement_id}}", "similar"],
+              "query": [
+                {
+                  "key": "threshold",
+                  "value": "0.7"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Detect Conflicts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/requirements/{{requirement_id}}/conflicts",
+              "host": ["{{base_url}}"],
+              "path": ["requirements", "{{requirement_id}}", "conflicts"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Analyze Impact",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/requirements/{{requirement_id}}/impact",
+              "host": ["{{base_url}}"],
+              "path": ["requirements", "{{requirement_id}}", "impact"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Architecture",
+      "description": "Architecture decisions, patterns, and technology stacks",
+      "item": [
+        {
+          "name": "List Architecture Decisions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/architecture/decisions?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["architecture", "decisions"],
+              "query": [
+                {
+                  "key": "projectId",
+                  "value": "{{project_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "APPROVED",
+                  "disabled": true
+                },
+                {
+                  "key": "requirementId",
+                  "value": "{{requirement_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Architecture Decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Microservices Architecture for Authentication\",\n  \"description\": \"Implement authentication as a separate microservice for better scalability and maintainability\",\n  \"rationale\": \"Separate authentication service allows for independent scaling, better fault isolation, and easier compliance management\",\n  \"requirementIds\": [\"{{requirement_id}}\"],\n  \"patternIds\": [],\n  \"alternatives\": [\n    {\n      \"title\": \"Monolithic Integration\",\n      \"description\": \"Integrate authentication directly into main application\",\n      \"pros\": [\"Simpler deployment\", \"Fewer network calls\"],\n      \"cons\": [\"Tight coupling\", \"Harder to scale\", \"Compliance complexity\"],\n      \"rejectionReason\": \"Does not provide required isolation for security compliance\"\n    }\n  ],\n  \"consequences\": [\n    \"Increased system complexity\",\n    \"Better scalability for authentication operations\",\n    \"Clearer security boundaries\",\n    \"Additional operational overhead\"\n  ],\n  \"tradeOffs\": [\n    {\n      \"aspect\": \"Complexity vs Scalability\",\n      \"gain\": \"Independent scaling and fault isolation\",\n      \"loss\": \"Increased system complexity and operational overhead\",\n      \"mitigation\": \"Implement comprehensive monitoring and automated deployment pipelines\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/architecture/decisions",
+              "host": ["{{base_url}}"],
+              "path": ["architecture", "decisions"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Architecture decision created successfully', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('id');",
+                  "});",
+                  "",
+                  "// Store created decision ID",
+                  "if (pm.response.code === 201) {",
+                  "  const responseData = pm.response.json();",
+                  "  pm.environment.set('architecture_decision_id', responseData.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Architecture Patterns",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/architecture/patterns?type=MICROSERVICES&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["architecture", "patterns"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "MICROSERVICES"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Technology Stacks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/architecture/technology-stacks",
+              "host": ["{{base_url}}"],
+              "path": ["architecture", "technology-stacks"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Integration",
+      "description": "Cross-module integration between requirements and architecture",
+      "item": [
+        {
+          "name": "List Mappings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integration/mappings",
+              "host": ["{{base_url}}"],
+              "path": ["integration", "mappings"],
+              "query": [
+                {
+                  "key": "requirementId",
+                  "value": "{{requirement_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "architectureDecisionId",
+                  "value": "{{architecture_decision_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "confidence",
+                  "value": "0.7",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Mapping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requirementId\": \"{{requirement_id}}\",\n  \"architectureDecisionId\": \"{{architecture_decision_id}}\",\n  \"mappingType\": \"DIRECT\",\n  \"confidence\": 0.92,\n  \"rationale\": \"Authentication requirement directly drives the microservices architecture decision for better security isolation\",\n  \"implementationGuidance\": \"Implement authentication service as separate microservice with dedicated database, API gateway integration, and security monitoring\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/integration/mappings",
+              "host": ["{{base_url}}"],
+              "path": ["integration", "mappings"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mapping created successfully', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('id');",
+                  "  pm.expect(jsonData.confidence).to.be.above(0.9);",
+                  "});",
+                  "",
+                  "// Store created mapping ID",
+                  "if (pm.response.code === 201) {",
+                  "  const responseData = pm.response.json();",
+                  "  pm.environment.set('mapping_id', responseData.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate Recommendations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integration/recommendations/{{requirement_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["integration", "recommendations", "{{requirement_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Recommendations generated successfully', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('recommendedPatterns');",
+                  "  pm.expect(jsonData).to.have.property('recommendedTechnologies');",
+                  "  pm.expect(jsonData).to.have.property('confidence');",
+                  "  pm.expect(jsonData.confidence).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Validate Alignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requirementId\": \"{{requirement_id}}\",\n  \"architectureDecisionId\": \"{{architecture_decision_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/integration/validation",
+              "host": ["{{base_url}}"],
+              "path": ["integration", "validation"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Integration Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integration/metrics?projectId={{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["integration", "metrics"],
+              "query": [
+                {
+                  "key": "projectId",
+                  "value": "{{project_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Integration Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integration/health",
+              "host": ["{{base_url}}"],
+              "path": ["integration", "health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "description": "Cross-module search capabilities",
+      "item": [
+        {
+          "name": "Cross-Module Search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/search?query=authentication&type=all&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["search"],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "authentication"
+                },
+                {
+                  "key": "type",
+                  "value": "all"
+                },
+                {
+                  "key": "projectId",
+                  "value": "{{project_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GraphQL",
+      "description": "GraphQL API examples",
+      "item": [
+        {
+          "name": "GraphQL Query - Get Requirement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetRequirement($id: ID!) { requirement(id: $id) { id title description type status priority completenessScore qualityScore acceptanceCriteria businessValue createdAt updatedAt project { id name description } stakeholder { id name email role } } }\",\n  \"variables\": {\n    \"id\": \"{{requirement_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/graphql",
+              "host": ["{{base_url}}"],
+              "path": ["graphql"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GraphQL Query - Get Recommendations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetRecommendations($requirementId: ID!) { generateArchitectureRecommendations(requirementId: $requirementId) { confidence reasoning recommendedPatterns { pattern { id name type description } applicabilityScore benefits risks implementationComplexity prerequisites } recommendedTechnologies { technologyStack { id name description } suitabilityScore alignmentReason implementationEffort learningCurveImpact riskFactors } implementationStrategy { approach estimatedEffort timeline } } }\",\n  \"variables\": {\n    \"requirementId\": \"{{requirement_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/graphql",
+              "host": ["{{base_url}}"],
+              "path": ["graphql"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GraphQL Mutation - Create Requirement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateRequirement($input: CreateRequirementInput!) { createRequirement(input: $input) { id title description type status priority completenessScore qualityScore acceptanceCriteria businessValue createdAt project { id name } stakeholder { id name } } }\",\n  \"variables\": {\n    \"input\": {\n      \"title\": \"Payment Processing Integration\",\n      \"description\": \"The system must integrate with Stripe and PayPal to process customer payments securely with PCI compliance\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"HIGH\",\n      \"projectId\": \"{{project_id}}\",\n      \"stakeholderId\": \"{{user_id}}\",\n      \"acceptanceCriteria\": [\n        \"Support Stripe and PayPal payment methods\",\n        \"Implement PCI DSS compliance\",\n        \"Handle payment failures gracefully\",\n        \"Generate payment receipts\"\n      ],\n      \"businessValue\": \"Enable secure payment processing to increase customer conversion rates\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/graphql",
+              "host": ["{{base_url}}"],
+              "path": ["graphql"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Error Scenarios",
+      "description": "Test various error conditions",
+      "item": [
+        {
+          "name": "401 - Unauthorized (Invalid Token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid-token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/requirements",
+              "host": ["{{base_url}}"],
+              "path": ["requirements"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 401 Unauthorized', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.error.code).to.eql('INVALID_TOKEN');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 - Validation Error",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\",\n  \"description\": \"\",\n  \"projectId\": \"invalid-uuid\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/requirements",
+              "host": ["{{base_url}}"],
+              "path": ["requirements"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 400 Bad Request', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.error.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(jsonData.error.details).to.have.property('field');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 - Resource Not Found",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/requirements/req-nonexistent-id",
+              "host": ["{{base_url}}"],
+              "path": ["requirements", "req-nonexistent-id"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 404 Not Found', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.error.code).to.eql('RESOURCE_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Performance Tests",
+      "description": "Performance and load testing scenarios",
+      "item": [
+        {
+          "name": "Bulk Requirements Creation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"title\": \"Load Test Requirement 1\",\n    \"description\": \"Test requirement for performance testing\",\n    \"type\": \"FUNCTIONAL\",\n    \"priority\": \"MEDIUM\",\n    \"projectId\": \"{{project_id}}\",\n    \"stakeholderId\": \"{{user_id}}\"\n  },\n  {\n    \"title\": \"Load Test Requirement 2\",\n    \"description\": \"Test requirement for performance testing\",\n    \"type\": \"NON_FUNCTIONAL\",\n    \"priority\": \"LOW\",\n    \"projectId\": \"{{project_id}}\",\n    \"stakeholderId\": \"{{user_id}}\"\n  }\n]"
+            },
+            "url": {
+              "raw": "{{base_url}}/requirements/batch",
+              "host": ["{{base_url}}"],
+              "path": ["requirements", "batch"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Large Dataset Query",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/requirements?limit=100&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["requirements"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Response time is acceptable for large dataset', () => {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test('Returns expected number of results', () => {",
+                  "  const jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.data.length).to.be.at.most(100);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
