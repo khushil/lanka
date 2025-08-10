@@ -1,0 +1,2348 @@
+openapi: 3.0.3
+info:
+  title: LANKA Architecture Intelligence API
+  version: 2.0.0
+  description: |
+    ## LANKA Architecture Intelligence API Documentation
+
+    The LANKA API provides comprehensive capabilities for intelligent requirements management and architecture decision support.
+    This API enables seamless integration between Requirements and Architecture modules with AI-powered recommendations,
+    pattern recognition, and impact analysis.
+
+    ### Key Features
+    - **Requirements Intelligence**: AI-powered requirement analysis, similarity detection, and conflict resolution
+    - **Architecture Intelligence**: Pattern recommendations, technology stack suggestions, and decision support
+    - **Cross-Module Integration**: Bidirectional mapping between requirements and architecture decisions
+    - **Real-time Analytics**: Performance metrics, health monitoring, and impact analysis
+    - **Graph-Based Insights**: Neo4j-powered relationship analysis and recommendations
+
+    ### Authentication
+    All API endpoints require authentication. See the Authentication section for details.
+
+    ### Rate Limiting
+    API requests are subject to rate limiting. See headers for current limits:
+    - `X-RateLimit-Limit`: Requests allowed per time window
+    - `X-RateLimit-Remaining`: Requests remaining in current window
+    - `X-RateLimit-Reset`: Unix timestamp when the rate limit resets
+  
+  contact:
+    name: LANKA Development Team
+    email: dev@lanka.ai
+    url: https://lanka.ai/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.lanka.ai/v2
+    description: Production server
+  - url: https://staging-api.lanka.ai/v2
+    description: Staging server
+  - url: http://localhost:4000
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: API Health Check
+      description: Verify API availability and service health
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                  services:
+                    type: object
+                    properties:
+                      neo4j:
+                        type: string
+                        enum: [connected, disconnected]
+                      graphql:
+                        type: string
+                        enum: [available, unavailable]
+              examples:
+                healthy:
+                  value:
+                    status: healthy
+                    timestamp: "2024-01-15T10:30:00Z"
+                    version: "2.0.0"
+                    services:
+                      neo4j: connected
+                      graphql: available
+
+  /requirements:
+    get:
+      summary: List Requirements
+      description: Retrieve a paginated list of requirements with optional filtering
+      operationId: listRequirements
+      tags:
+        - Requirements
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          description: Filter by project ID
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          description: Filter by requirement type
+          schema:
+            $ref: '#/components/schemas/RequirementType'
+        - name: status
+          in: query
+          description: Filter by requirement status
+          schema:
+            $ref: '#/components/schemas/RequirementStatus'
+        - name: priority
+          in: query
+          description: Filter by priority level
+          schema:
+            $ref: '#/components/schemas/RequirementPriority'
+        - name: limit
+          in: query
+          description: Number of requirements to return (max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Number of requirements to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: search
+          in: query
+          description: Search requirements by title or description
+          schema:
+            type: string
+            maxLength: 500
+      responses:
+        '200':
+          description: List of requirements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Requirement'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+              examples:
+                requirements:
+                  value:
+                    data:
+                      - id: "req-123e4567-e89b-12d3-a456-426614174000"
+                        title: "User Authentication System"
+                        description: "Implement secure user authentication with multi-factor support"
+                        type: FUNCTIONAL
+                        status: APPROVED
+                        priority: HIGH
+                        createdAt: "2024-01-10T09:00:00Z"
+                        completenessScore: 0.85
+                        qualityScore: 0.92
+                    pagination:
+                      limit: 20
+                      offset: 0
+                      total: 156
+                      hasNext: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create Requirement
+      description: Create a new requirement with AI-powered analysis
+      operationId: createRequirement
+      tags:
+        - Requirements
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRequirementInput'
+            examples:
+              functional_requirement:
+                summary: Functional Requirement
+                value:
+                  title: "Payment Processing Integration"
+                  description: "The system must integrate with Stripe and PayPal to process customer payments securely with PCI compliance"
+                  type: FUNCTIONAL
+                  priority: HIGH
+                  projectId: "proj-123e4567-e89b-12d3-a456-426614174000"
+                  stakeholderId: "user-123e4567-e89b-12d3-a456-426614174000"
+                  acceptanceCriteria:
+                    - "Support Stripe and PayPal payment methods"
+                    - "Implement PCI DSS compliance"
+                    - "Handle payment failures gracefully"
+                    - "Generate payment receipts"
+                  businessValue: "Enable secure payment processing to increase customer conversion rates"
+      responses:
+        '201':
+          description: Requirement created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requirement:
+                    $ref: '#/components/schemas/Requirement'
+                  analysis:
+                    $ref: '#/components/schemas/RequirementAnalysis'
+              examples:
+                created:
+                  value:
+                    requirement:
+                      id: "req-123e4567-e89b-12d3-a456-426614174001"
+                      title: "Payment Processing Integration"
+                      description: "The system must integrate with Stripe and PayPal to process customer payments securely with PCI compliance"
+                      type: FUNCTIONAL
+                      status: DRAFT
+                      priority: HIGH
+                      createdAt: "2024-01-15T10:30:00Z"
+                      completenessScore: 0.88
+                      qualityScore: 0.91
+                    analysis:
+                      completenessScore: 0.88
+                      qualityScore: 0.91
+                      suggestions:
+                        - "Consider adding error handling specifications"
+                        - "Define performance requirements for payment processing"
+                      similarRequirements:
+                        - requirementId: "req-456"
+                          similarity: 0.85
+                          projectName: "E-commerce Platform"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /requirements/{id}:
+    get:
+      summary: Get Requirement
+      description: Retrieve a specific requirement with detailed information
+      operationId: getRequirement
+      tags:
+        - Requirements
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Requirement ID
+          schema:
+            type: string
+            format: uuid
+        - name: include
+          in: query
+          description: Include related entities
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [mappings, recommendations, conflicts, similar]
+      responses:
+        '200':
+          description: Requirement details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requirement:
+                    $ref: '#/components/schemas/Requirement'
+                  mappings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementArchitectureMapping'
+                  recommendations:
+                    $ref: '#/components/schemas/RequirementArchitectureRecommendation'
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementConflict'
+                  similarRequirements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SimilarRequirement'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      summary: Update Requirement
+      description: Update an existing requirement
+      operationId: updateRequirement
+      tags:
+        - Requirements
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Requirement ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRequirementInput'
+      responses:
+        '200':
+          description: Requirement updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requirement:
+                    $ref: '#/components/schemas/Requirement'
+                  impactAnalysis:
+                    $ref: '#/components/schemas/RequirementImpactAnalysis'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /requirements/{id}/similar:
+    get:
+      summary: Find Similar Requirements
+      description: Find requirements similar to the specified requirement
+      operationId: findSimilarRequirements
+      tags:
+        - Requirements
+        - AI/ML
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Requirement ID
+          schema:
+            type: string
+            format: uuid
+        - name: threshold
+          in: query
+          description: Similarity threshold (0.0 to 1.0)
+          schema:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+            default: 0.7
+        - name: limit
+          in: query
+          description: Maximum number of similar requirements to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: List of similar requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SimilarRequirement'
+
+  /requirements/{id}/conflicts:
+    get:
+      summary: Detect Requirement Conflicts
+      description: Identify potential conflicts with other requirements
+      operationId: detectConflicts
+      tags:
+        - Requirements
+        - Analysis
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Requirement ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of potential conflicts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequirementConflict'
+
+  /requirements/{id}/impact:
+    get:
+      summary: Analyze Requirement Impact
+      description: Analyze the impact of changes to this requirement on architecture
+      operationId: analyzeRequirementImpact
+      tags:
+        - Requirements
+        - Architecture
+        - Analysis
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Requirement ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Impact analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementImpactAnalysis'
+
+  /architecture/decisions:
+    get:
+      summary: List Architecture Decisions
+      description: Retrieve architecture decisions with filtering options
+      operationId: listArchitectureDecisions
+      tags:
+        - Architecture
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          description: Filter by project ID
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          description: Filter by decision status
+          schema:
+            $ref: '#/components/schemas/ArchitectureDecisionStatus'
+        - name: requirementId
+          in: query
+          description: Filter by related requirement
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of architecture decisions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ArchitectureDecision'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      summary: Create Architecture Decision
+      description: Create a new architecture decision record
+      operationId: createArchitectureDecision
+      tags:
+        - Architecture
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateArchitectureDecisionInput'
+      responses:
+        '201':
+          description: Architecture decision created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchitectureDecision'
+
+  /architecture/patterns:
+    get:
+      summary: List Architecture Patterns
+      description: Retrieve available architecture patterns
+      operationId: listArchitecturePatterns
+      tags:
+        - Architecture
+        - Patterns
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          description: Filter by pattern type
+          schema:
+            $ref: '#/components/schemas/ArchitecturePatternType'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of architecture patterns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArchitecturePattern'
+
+  /architecture/technology-stacks:
+    get:
+      summary: List Technology Stacks
+      description: Retrieve available technology stack configurations
+      operationId: listTechnologyStacks
+      tags:
+        - Architecture
+        - Technology
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of technology stacks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TechnologyStack'
+
+  /integration/mappings:
+    get:
+      summary: List Requirement-Architecture Mappings
+      description: Retrieve mappings between requirements and architecture components
+      operationId: listMappings
+      tags:
+        - Integration
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: requirementId
+          in: query
+          description: Filter by requirement ID
+          schema:
+            type: string
+            format: uuid
+        - name: architectureDecisionId
+          in: query
+          description: Filter by architecture decision ID
+          schema:
+            type: string
+            format: uuid
+        - name: confidence
+          in: query
+          description: Minimum confidence threshold
+          schema:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+      responses:
+        '200':
+          description: List of mappings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequirementArchitectureMapping'
+
+    post:
+      summary: Create Mapping
+      description: Create a new mapping between requirement and architecture component
+      operationId: createMapping
+      tags:
+        - Integration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMappingInput'
+      responses:
+        '201':
+          description: Mapping created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementArchitectureMapping'
+
+  /integration/recommendations/{requirementId}:
+    get:
+      summary: Generate Architecture Recommendations
+      description: Get AI-powered architecture recommendations for a requirement
+      operationId: generateRecommendations
+      tags:
+        - Integration
+        - AI/ML
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: requirementId
+          in: path
+          required: true
+          description: Requirement ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Architecture recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementArchitectureRecommendation'
+
+  /integration/validation:
+    post:
+      summary: Validate Requirement-Architecture Alignment
+      description: Validate alignment between requirement and architecture decision
+      operationId: validateAlignment
+      tags:
+        - Integration
+        - Validation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - requirementId
+                - architectureDecisionId
+              properties:
+                requirementId:
+                  type: string
+                  format: uuid
+                architectureDecisionId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Alignment validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchitectureRequirementAlignment'
+
+  /integration/metrics:
+    get:
+      summary: Get Integration Metrics
+      description: Retrieve metrics about requirement-architecture integration
+      operationId: getIntegrationMetrics
+      tags:
+        - Integration
+        - Metrics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          description: Filter by project ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Integration metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationMetrics'
+
+  /integration/health:
+    get:
+      summary: Integration Health Check
+      description: Perform comprehensive health check of integration layer
+      operationId: integrationHealthCheck
+      tags:
+        - Integration
+        - Health
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Health check results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationHealthCheck'
+
+  /search:
+    get:
+      summary: Cross-Module Search
+      description: Search across requirements and architecture components
+      operationId: crossModuleSearch
+      tags:
+        - Search
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+            maxLength: 500
+        - name: type
+          in: query
+          description: Search entity type
+          schema:
+            type: string
+            enum: [requirements, architecture, all]
+            default: all
+        - name: projectId
+          in: query
+          description: Filter by project
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requirements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Requirement'
+                  architectureDecisions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ArchitectureDecision'
+                  patterns:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ArchitecturePattern'
+                  totalResults:
+                    type: integer
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT-based authentication. Include the token in the Authorization header:
+        `Authorization: Bearer <your-jwt-token>`
+        
+        Tokens can be obtained from the authentication endpoint and are valid for 24 hours.
+
+  schemas:
+    RequirementType:
+      type: string
+      enum:
+        - BUSINESS
+        - FUNCTIONAL
+        - NON_FUNCTIONAL
+        - USER_STORY
+        - ACCEPTANCE_CRITERIA
+        - BUSINESS_RULE
+        - COMPLIANCE
+      description: |
+        Type classification of requirements:
+        - **BUSINESS**: High-level business objectives and goals
+        - **FUNCTIONAL**: Specific system behaviors and capabilities
+        - **NON_FUNCTIONAL**: Quality attributes like performance, security
+        - **USER_STORY**: User-centered feature descriptions
+        - **ACCEPTANCE_CRITERIA**: Specific conditions that must be met
+        - **BUSINESS_RULE**: Business logic and constraints
+        - **COMPLIANCE**: Regulatory and compliance requirements
+
+    RequirementStatus:
+      type: string
+      enum:
+        - DRAFT
+        - REVIEW
+        - APPROVED
+        - IMPLEMENTED
+        - VALIDATED
+        - DEPRECATED
+      description: |
+        Current status of requirement in the development lifecycle:
+        - **DRAFT**: Initial creation, not yet reviewed
+        - **REVIEW**: Under stakeholder review
+        - **APPROVED**: Approved for implementation
+        - **IMPLEMENTED**: Development complete
+        - **VALIDATED**: Testing and validation complete
+        - **DEPRECATED**: No longer applicable
+
+    RequirementPriority:
+      type: string
+      enum:
+        - CRITICAL
+        - HIGH
+        - MEDIUM
+        - LOW
+      description: Business priority level of the requirement
+
+    ArchitectureDecisionStatus:
+      type: string
+      enum:
+        - DRAFT
+        - PROPOSED
+        - APPROVED
+        - IMPLEMENTED
+        - DEPRECATED
+        - SUPERSEDED
+
+    ArchitecturePatternType:
+      type: string
+      enum:
+        - MICROSERVICES
+        - MONOLITHIC
+        - SERVERLESS
+        - EVENT_DRIVEN
+        - LAYERED
+        - HEXAGONAL
+        - CQRS
+        - SAGA
+
+    Requirement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique requirement identifier
+          example: "req-123e4567-e89b-12d3-a456-426614174000"
+        title:
+          type: string
+          maxLength: 200
+          description: Brief descriptive title
+          example: "User Authentication System"
+        description:
+          type: string
+          maxLength: 5000
+          description: Detailed requirement description
+          example: "The system must provide secure user authentication with support for multi-factor authentication, password policies, and session management."
+        type:
+          $ref: '#/components/schemas/RequirementType'
+        status:
+          $ref: '#/components/schemas/RequirementStatus'
+        priority:
+          $ref: '#/components/schemas/RequirementPriority'
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+          example: "2024-01-15T14:22:00Z"
+        projectId:
+          type: string
+          format: uuid
+          description: Associated project identifier
+        stakeholderId:
+          type: string
+          format: uuid
+          description: Stakeholder who owns this requirement
+        completenessScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: AI-calculated completeness score
+          example: 0.85
+        qualityScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: AI-calculated quality score
+          example: 0.92
+        acceptanceCriteria:
+          type: array
+          items:
+            type: string
+          description: List of acceptance criteria
+          example:
+            - "User can login with email and password"
+            - "System enforces strong password policy"
+            - "Failed login attempts are logged"
+        businessValue:
+          type: string
+          maxLength: 1000
+          description: Business justification and value
+          example: "Enables secure access to the platform, protecting user data and maintaining compliance with security standards"
+      required:
+        - id
+        - title
+        - description
+        - type
+        - status
+        - createdAt
+        - projectId
+        - stakeholderId
+
+    CreateRequirementInput:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          description: Requirement title (auto-generated if not provided)
+        description:
+          type: string
+          maxLength: 5000
+          description: Detailed requirement description
+        type:
+          $ref: '#/components/schemas/RequirementType'
+        priority:
+          $ref: '#/components/schemas/RequirementPriority'
+        projectId:
+          type: string
+          format: uuid
+          description: Project this requirement belongs to
+        stakeholderId:
+          type: string
+          format: uuid
+          description: Stakeholder who owns this requirement
+        acceptanceCriteria:
+          type: array
+          items:
+            type: string
+            maxLength: 500
+          maxItems: 20
+          description: Acceptance criteria for the requirement
+        businessValue:
+          type: string
+          maxLength: 1000
+          description: Business value and justification
+      required:
+        - description
+        - projectId
+        - stakeholderId
+      example:
+        title: "Payment Processing Integration"
+        description: "The system must integrate with Stripe and PayPal to process customer payments securely with PCI compliance"
+        type: FUNCTIONAL
+        priority: HIGH
+        projectId: "proj-123e4567-e89b-12d3-a456-426614174000"
+        stakeholderId: "user-123e4567-e89b-12d3-a456-426614174000"
+        acceptanceCriteria:
+          - "Support Stripe and PayPal payment methods"
+          - "Implement PCI DSS compliance"
+          - "Handle payment failures gracefully"
+
+    UpdateRequirementInput:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        type:
+          $ref: '#/components/schemas/RequirementType'
+        status:
+          $ref: '#/components/schemas/RequirementStatus'
+        priority:
+          $ref: '#/components/schemas/RequirementPriority'
+        acceptanceCriteria:
+          type: array
+          items:
+            type: string
+            maxLength: 500
+          maxItems: 20
+        businessValue:
+          type: string
+          maxLength: 1000
+
+    RequirementAnalysis:
+      type: object
+      properties:
+        completenessScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: How complete the requirement specification is
+        qualityScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Overall quality of the requirement
+        suggestions:
+          type: array
+          items:
+            type: string
+          description: AI-generated improvement suggestions
+        similarRequirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/SimilarRequirement'
+        recommendedExperts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Expert'
+        extractedEntities:
+          type: object
+          description: NLP-extracted entities and concepts
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    SimilarRequirement:
+      type: object
+      properties:
+        requirementId:
+          type: string
+          format: uuid
+        requirement:
+          $ref: '#/components/schemas/Requirement'
+        similarity:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Cosine similarity score
+        projectName:
+          type: string
+          description: Name of the project containing the similar requirement
+        successMetrics:
+          $ref: '#/components/schemas/SuccessMetrics'
+        adaptationGuidelines:
+          type: array
+          items:
+            type: string
+          description: Suggestions for adapting this similar requirement
+
+    SuccessMetrics:
+      type: object
+      properties:
+        implementationTime:
+          type: integer
+          description: Implementation time in hours
+        defectRate:
+          type: number
+          description: Post-implementation defect rate
+        stakeholderSatisfaction:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Stakeholder satisfaction score
+
+    RequirementConflict:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        requirement1:
+          $ref: '#/components/schemas/Requirement'
+        requirement2:
+          $ref: '#/components/schemas/Requirement'
+        conflictType:
+          type: string
+          enum:
+            - RESOURCE_CONFLICT
+            - PRIORITY_CONFLICT
+            - TECHNICAL_INCOMPATIBILITY
+            - BUSINESS_LOGIC_CONFLICT
+            - PERFORMANCE_TRADE_OFF
+        description:
+          type: string
+          description: Detailed explanation of the conflict
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        resolutionSuggestions:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [IDENTIFIED, ACKNOWLEDGED, RESOLVED, IGNORED]
+
+    Expert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        expertise:
+          type: array
+          items:
+            type: string
+          description: Areas of expertise
+        successRate:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Historical success rate with similar requirements
+
+    ArchitectureDecision:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        rationale:
+          type: string
+          description: Reasoning behind the decision
+        status:
+          $ref: '#/components/schemas/ArchitectureDecisionStatus'
+        alternatives:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alternative'
+        consequences:
+          type: array
+          items:
+            type: string
+          description: Expected outcomes and implications
+        tradeOffs:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeOff'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        approvedAt:
+          type: string
+          format: date-time
+        deprecatedAt:
+          type: string
+          format: date-time
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Requirement'
+          description: Requirements that influenced this decision
+        patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArchitecturePattern'
+        technologyStack:
+          $ref: '#/components/schemas/TechnologyStack'
+
+    Alternative:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        pros:
+          type: array
+          items:
+            type: string
+        cons:
+          type: array
+          items:
+            type: string
+        rejectionReason:
+          type: string
+          description: Why this alternative was rejected
+
+    TradeOff:
+      type: object
+      properties:
+        aspect:
+          type: string
+          description: What aspect is being traded off
+        gain:
+          type: string
+          description: What is gained
+        loss:
+          type: string
+          description: What is lost or compromised
+        mitigation:
+          type: string
+          description: How to mitigate the loss
+
+    CreateArchitectureDecisionInput:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        rationale:
+          type: string
+          maxLength: 2000
+        requirementIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Requirements that influence this decision
+        patternIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Patterns applied in this decision
+        technologyStackId:
+          type: string
+          format: uuid
+          description: Technology stack chosen
+        alternatives:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+              pros:
+                type: array
+                items:
+                  type: string
+              cons:
+                type: array
+                items:
+                  type: string
+              rejectionReason:
+                type: string
+        consequences:
+          type: array
+          items:
+            type: string
+        tradeOffs:
+          type: array
+          items:
+            type: object
+            properties:
+              aspect:
+                type: string
+              gain:
+                type: string
+              loss:
+                type: string
+              mitigation:
+                type: string
+      required:
+        - title
+        - description
+        - rationale
+        - requirementIds
+
+    ArchitecturePattern:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/ArchitecturePatternType'
+        description:
+          type: string
+        applicabilityConditions:
+          type: array
+          items:
+            type: string
+          description: When this pattern should be used
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatternComponent'
+        qualityAttributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/QualityAttribute'
+        knownUses:
+          type: array
+          items:
+            type: string
+          description: Known successful implementations
+        successRate:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        adoptionCount:
+          type: integer
+          description: Number of times this pattern has been adopted
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PatternComponent:
+      type: object
+      properties:
+        name:
+          type: string
+        responsibility:
+          type: string
+          description: What this component is responsible for
+        interactions:
+          type: array
+          items:
+            type: string
+          description: How this component interacts with others
+        constraints:
+          type: array
+          items:
+            type: string
+          description: Constraints on this component
+
+    QualityAttribute:
+      type: object
+      properties:
+        name:
+          type: string
+          enum:
+            - PERFORMANCE
+            - SCALABILITY
+            - SECURITY
+            - MAINTAINABILITY
+            - RELIABILITY
+            - USABILITY
+            - TESTABILITY
+            - DEPLOYABILITY
+        impact:
+          type: string
+          enum: [POSITIVE, NEGATIVE, NEUTRAL]
+        description:
+          type: string
+        metric:
+          type: string
+          description: How to measure this quality attribute
+
+    TechnologyStack:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        layers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechnologyLayer'
+        compatibility:
+          $ref: '#/components/schemas/CompatibilityMatrix'
+        performanceMetrics:
+          $ref: '#/components/schemas/PerformanceMetrics'
+        costEstimate:
+          $ref: '#/components/schemas/CostEstimate'
+        teamExpertise:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Team's expertise level with this stack
+        successRate:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TechnologyLayer:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Layer name (e.g., "Frontend", "Backend", "Database")
+        technologies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Technology'
+        purpose:
+          type: string
+          description: Purpose of this layer
+        alternatives:
+          type: array
+          items:
+            $ref: '#/components/schemas/Technology'
+          description: Alternative technology options
+
+    Technology:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        license:
+          type: string
+        vendor:
+          type: string
+        maturity:
+          type: string
+          enum: [EXPERIMENTAL, EMERGING, MATURE, LEGACY]
+        communitySupport:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        learningCurve:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, STEEP]
+
+    CompatibilityMatrix:
+      type: object
+      properties:
+        compatible:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Lists of mutually compatible technologies
+        incompatible:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Lists of incompatible technologies
+        requires:
+          type: object
+          additionalProperties: true
+          description: Technology dependencies
+
+    PerformanceMetrics:
+      type: object
+      properties:
+        throughput:
+          type: number
+          description: Requests per second
+        latency:
+          type: number
+          description: Average response time in milliseconds
+        scalability:
+          type: string
+          enum: [VERTICAL, HORIZONTAL, BOTH, LIMITED]
+        reliability:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Uptime percentage
+        maintainability:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Maintainability score
+
+    CostEstimate:
+      type: object
+      properties:
+        upfront:
+          type: number
+          description: Initial setup cost
+        monthly:
+          type: number
+          description: Monthly operational cost
+        yearly:
+          type: number
+          description: Annual operational cost
+        currency:
+          type: string
+          default: USD
+        breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/CostBreakdown'
+
+    CostBreakdown:
+      type: object
+      properties:
+        category:
+          type: string
+          description: Cost category (e.g., "Infrastructure", "Licensing")
+        service:
+          type: string
+          description: Specific service or component
+        quantity:
+          type: number
+        unitCost:
+          type: number
+        totalCost:
+          type: number
+
+    RequirementArchitectureMapping:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        requirementId:
+          type: string
+          format: uuid
+        requirement:
+          $ref: '#/components/schemas/Requirement'
+        architectureDecisionId:
+          type: string
+          format: uuid
+        architectureDecision:
+          $ref: '#/components/schemas/ArchitectureDecision'
+        architecturePatternId:
+          type: string
+          format: uuid
+        architecturePattern:
+          $ref: '#/components/schemas/ArchitecturePattern'
+        technologyStackId:
+          type: string
+          format: uuid
+        technologyStack:
+          $ref: '#/components/schemas/TechnologyStack'
+        mappingType:
+          $ref: '#/components/schemas/RequirementMappingType'
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Confidence in this mapping
+        rationale:
+          type: string
+          description: Why this mapping was created
+        implementationGuidance:
+          type: string
+          description: How to implement this mapping
+        tradeOffs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArchitecturalTradeOff'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        validatedAt:
+          type: string
+          format: date-time
+        validatedBy:
+          type: string
+          description: Who validated this mapping
+
+    RequirementMappingType:
+      type: string
+      enum:
+        - DIRECT
+        - DERIVED
+        - INFLUENCED
+        - CONSTRAINT
+        - QUALITY_ATTRIBUTE
+      description: |
+        Type of relationship between requirement and architecture:
+        - **DIRECT**: Requirement directly drives architecture decision
+        - **DERIVED**: Architecture decision is derived from requirement
+        - **INFLUENCED**: Requirement influences but doesn't drive decision
+        - **CONSTRAINT**: Requirement constrains architecture options
+        - **QUALITY_ATTRIBUTE**: Requirement defines quality attributes
+
+    ArchitecturalTradeOff:
+      type: object
+      properties:
+        aspect:
+          type: string
+          description: What aspect is being traded off
+        benefit:
+          type: string
+          description: Benefit gained
+        cost:
+          type: string
+          description: Cost or compromise
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        mitigationStrategy:
+          type: string
+          description: How to mitigate risks
+
+    CreateMappingInput:
+      type: object
+      properties:
+        requirementId:
+          type: string
+          format: uuid
+        architectureDecisionId:
+          type: string
+          format: uuid
+        architecturePatternId:
+          type: string
+          format: uuid
+        technologyStackId:
+          type: string
+          format: uuid
+        mappingType:
+          $ref: '#/components/schemas/RequirementMappingType'
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        rationale:
+          type: string
+          maxLength: 1000
+        implementationGuidance:
+          type: string
+          maxLength: 2000
+      required:
+        - requirementId
+        - mappingType
+        - confidence
+        - rationale
+
+    RequirementArchitectureRecommendation:
+      type: object
+      properties:
+        requirementId:
+          type: string
+          format: uuid
+        recommendedPatterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatternRecommendation'
+        recommendedTechnologies:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechnologyRecommendation'
+        architecturalConstraints:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArchitecturalConstraint'
+        qualityAttributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/QualityAttributeMapping'
+        implementationStrategy:
+          $ref: '#/components/schemas/ImplementationStrategy'
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        reasoning:
+          type: array
+          items:
+            type: string
+          description: Human-readable reasoning for recommendations
+        alternativeApproaches:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlternativeApproach'
+
+    PatternRecommendation:
+      type: object
+      properties:
+        pattern:
+          $ref: '#/components/schemas/ArchitecturePattern'
+        applicabilityScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        benefits:
+          type: array
+          items:
+            type: string
+        risks:
+          type: array
+          items:
+            type: string
+        implementationComplexity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, VERY_HIGH]
+        prerequisites:
+          type: array
+          items:
+            type: string
+
+    TechnologyRecommendation:
+      type: object
+      properties:
+        technologyStack:
+          $ref: '#/components/schemas/TechnologyStack'
+        suitabilityScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        alignmentReason:
+          type: string
+        implementationEffort:
+          type: number
+          description: Estimated effort in person-hours
+        learningCurveImpact:
+          type: string
+          enum: [MINIMAL, MODERATE, SIGNIFICANT, MAJOR]
+        riskFactors:
+          type: array
+          items:
+            type: string
+
+    ArchitecturalConstraint:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - PERFORMANCE
+            - SECURITY
+            - SCALABILITY
+            - COMPLIANCE
+            - INTEGRATION
+            - OPERATIONAL
+            - BUDGET
+        description:
+          type: string
+        impact:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        mandatory:
+          type: boolean
+        validationCriteria:
+          type: array
+          items:
+            type: string
+
+    QualityAttributeMapping:
+      type: object
+      properties:
+        requirementId:
+          type: string
+          format: uuid
+        requirement:
+          $ref: '#/components/schemas/Requirement'
+        qualityAttribute:
+          type: string
+        targetValue:
+          type: string
+          description: Target value or threshold
+        measurementCriteria:
+          type: string
+          description: How to measure this attribute
+        architecturalImplication:
+          type: string
+          description: What this means for architecture
+        verificationMethod:
+          type: string
+          description: How to verify this attribute is achieved
+
+    ImplementationStrategy:
+      type: object
+      properties:
+        approach:
+          type: string
+          enum: [BIG_BANG, INCREMENTAL, PARALLEL, PHASED]
+        phases:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImplementationPhase'
+        dependencies:
+          type: array
+          items:
+            type: string
+        riskMitigations:
+          type: array
+          items:
+            type: string
+        estimatedEffort:
+          type: number
+          description: Total effort in person-hours
+        timeline:
+          type: string
+          description: Estimated timeline
+
+    ImplementationPhase:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Requirement'
+        architectureComponents:
+          type: array
+          items:
+            type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+        deliverables:
+          type: array
+          items:
+            type: string
+        estimatedDuration:
+          type: number
+          description: Duration in weeks
+
+    AlternativeApproach:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        patterns:
+          type: array
+          items:
+            type: string
+        technologies:
+          type: array
+          items:
+            type: string
+        pros:
+          type: array
+          items:
+            type: string
+        cons:
+          type: array
+          items:
+            type: string
+        suitabilityConditions:
+          type: array
+          items:
+            type: string
+
+    ArchitectureRequirementAlignment:
+      type: object
+      properties:
+        requirementId:
+          type: string
+          format: uuid
+        requirement:
+          $ref: '#/components/schemas/Requirement'
+        architectureDecisionId:
+          type: string
+          format: uuid
+        architectureDecision:
+          $ref: '#/components/schemas/ArchitectureDecision'
+        alignmentScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        alignmentType:
+          $ref: '#/components/schemas/AlignmentType'
+        gaps:
+          type: array
+          items:
+            type: string
+          description: Identified gaps in alignment
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Recommendations to improve alignment
+        validationStatus:
+          $ref: '#/components/schemas/ValidationStatus'
+        lastAssessed:
+          type: string
+          format: date-time
+        assessedBy:
+          type: string
+          description: Who performed the assessment
+
+    AlignmentType:
+      type: string
+      enum:
+        - FULLY_ALIGNED
+        - PARTIALLY_ALIGNED
+        - MISALIGNED
+        - NOT_APPLICABLE
+
+    ValidationStatus:
+      type: string
+      enum:
+        - PENDING
+        - VALIDATED
+        - NEEDS_REVIEW
+        - REJECTED
+
+    RequirementImpactAnalysis:
+      type: object
+      properties:
+        requirementId:
+          type: string
+          format: uuid
+        requirement:
+          $ref: '#/components/schemas/Requirement'
+        impactedArchitectureDecisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArchitectureDecision'
+        impactedPatterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArchitecturePattern'
+        impactedTechnologies:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechnologyStack'
+        cascadingChanges:
+          type: array
+          items:
+            $ref: '#/components/schemas/CascadingChange'
+        riskAssessment:
+          $ref: '#/components/schemas/RiskAssessment'
+        changeComplexity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, VERY_HIGH]
+        estimatedEffort:
+          type: number
+          description: Estimated effort in person-hours
+        createdAt:
+          type: string
+          format: date-time
+
+    CascadingChange:
+      type: object
+      properties:
+        targetType:
+          type: string
+          enum: [REQUIREMENT, ARCHITECTURE_DECISION, PATTERN, TECHNOLOGY]
+        targetId:
+          type: string
+          format: uuid
+        changeType:
+          type: string
+          enum: [UPDATE, DEPRECATE, CREATE, VALIDATE, REVIEW]
+        reason:
+          type: string
+        priority:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    RiskAssessment:
+      type: object
+      properties:
+        overallRisk:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        riskFactors:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskFactor'
+        mitigationStrategies:
+          type: array
+          items:
+            type: string
+        contingencyPlan:
+          type: string
+
+    RiskFactor:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [TECHNICAL, BUSINESS, OPERATIONAL, COMPLIANCE]
+        description:
+          type: string
+        probability:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        impact:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        score:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Overall risk score (probability × impact)
+
+    IntegrationMetrics:
+      type: object
+      properties:
+        totalRequirements:
+          type: integer
+          description: Total number of requirements
+        mappedRequirements:
+          type: integer
+          description: Number of requirements with architecture mappings
+        unmappedRequirements:
+          type: integer
+          description: Number of requirements without mappings
+        averageConfidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Average confidence across all mappings
+        alignmentDistribution:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Distribution of alignment types
+        validationCoverage:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Percentage of mappings that are validated
+        recommendationAccuracy:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Accuracy of AI recommendations
+        implementationProgress:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: Overall implementation progress
+
+    IntegrationHealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [HEALTHY, WARNING, CRITICAL]
+        lastChecked:
+          type: string
+          format: date-time
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthIssue'
+        metrics:
+          $ref: '#/components/schemas/IntegrationMetrics'
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Recommended actions to improve health
+
+    HealthIssue:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - ORPHANED_REQUIREMENT
+            - BROKEN_MAPPING
+            - STALE_RECOMMENDATION
+            - VALIDATION_FAILURE
+            - LOW_CONFIDENCE_MAPPING
+            - MISSING_IMPLEMENTATION
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        affectedItems:
+          type: array
+          items:
+            type: string
+          description: IDs of affected requirements, decisions, etc.
+        suggestedActions:
+          type: array
+          items:
+            type: string
+
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrevious:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code for programmatic handling
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: object
+              description: Additional error details
+            timestamp:
+              type: string
+              format: date-time
+            requestId:
+              type: string
+              format: uuid
+              description: Unique request identifier for tracking
+      required:
+        - error
+
+  responses:
+    BadRequest:
+      description: Bad request - validation error or malformed request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validation_error:
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: "Request validation failed"
+                  details:
+                    field: "description"
+                    issue: "Description is required and cannot be empty"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    Unauthorized:
+      description: Authentication required or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing_token:
+              value:
+                error:
+                  code: AUTHENTICATION_REQUIRED
+                  message: "Authentication token required"
+                  details:
+                    hint: "Include Authorization header with Bearer token"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+            invalid_token:
+              value:
+                error:
+                  code: INVALID_TOKEN
+                  message: "Authentication token is invalid or expired"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    Forbidden:
+      description: Access denied - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            access_denied:
+              value:
+                error:
+                  code: ACCESS_DENIED
+                  message: "Insufficient permissions to access this resource"
+                  details:
+                    required_permission: "requirements:read"
+                    user_permissions: ["requirements:write"]
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            requirement_not_found:
+              value:
+                error:
+                  code: RESOURCE_NOT_FOUND
+                  message: "Requirement not found"
+                  details:
+                    resource_type: "Requirement"
+                    resource_id: "req-123e4567-e89b-12d3-a456-426614174000"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    Conflict:
+      description: Resource conflict - operation conflicts with current state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            status_conflict:
+              value:
+                error:
+                  code: STATE_CONFLICT
+                  message: "Cannot update requirement in current status"
+                  details:
+                    current_status: "IMPLEMENTED"
+                    attempted_action: "update_description"
+                    allowed_statuses: ["DRAFT", "REVIEW"]
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per time window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when rate limit resets
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rate_limited:
+              value:
+                error:
+                  code: RATE_LIMIT_EXCEEDED
+                  message: "Too many requests"
+                  details:
+                    limit: 1000
+                    window: "1 hour"
+                    reset_at: "2024-01-15T11:00:00Z"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            server_error:
+              value:
+                error:
+                  code: INTERNAL_SERVER_ERROR
+                  message: "An unexpected error occurred"
+                  details:
+                    hint: "Please try again later or contact support"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  requestId: "req-123e4567-e89b-12d3-a456-426614174000"
+
+tags:
+  - name: Health
+    description: API health and status endpoints
+  - name: Requirements
+    description: Requirements management and analysis
+  - name: Architecture
+    description: Architecture decisions, patterns, and technology stacks
+  - name: Integration
+    description: Cross-module integration between requirements and architecture
+  - name: AI/ML
+    description: AI-powered analysis and recommendations
+  - name: Analysis
+    description: Impact analysis and metrics
+  - name: Patterns
+    description: Architecture pattern management
+  - name: Technology
+    description: Technology stack management
+  - name: Validation
+    description: Validation and alignment checking
+  - name: Metrics
+    description: Analytics and performance metrics
+  - name: Search
+    description: Cross-module search capabilities
+
+security:
+  - BearerAuth: []
+
+externalDocs:
+  description: LANKA API Documentation Portal
+  url: https://docs.lanka.ai

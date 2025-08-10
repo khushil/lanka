@@ -11,7 +11,20 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:bdd": "cucumber-js",
+    "test:integration": "jest tests/integration --testTimeout=30000",
+    "test:e2e": "jest tests/e2e --testTimeout=60000",
+    "test:performance": "artillery run tests/performance/load-test.yml",
+    "test:bdd": "cucumber-js --config tests/cucumber.config.js",
+    "test:bdd:dev": "cucumber-js --config tests/cucumber.config.js --profile development",
+    "test:bdd:integration": "cucumber-js --config tests/cucumber.config.js --profile integration",
+    "test:bdd:performance": "cucumber-js --config tests/cucumber.config.js --profile performance",
+    "test:bdd:smoke": "cucumber-js --config tests/cucumber.config.js --profile smoke",
+    "test:bdd:regression": "cucumber-js --config tests/cucumber.config.js --profile regression",
+    "test:bdd:ci": "cucumber-js --config tests/cucumber.config.js --profile ci",
+    "test:bdd:watch": "cucumber-js --config tests/cucumber.config.js --profile development --watch",
+    "test:bdd:debug": "cucumber-js --config tests/cucumber.config.js --profile development --format progress-bar",
+    "test:bdd:runner": "./scripts/run-bdd-tests.sh",
+    "test:all": "npm run test:coverage && npm run test:integration && npm run test:e2e && npm run test:bdd:smoke",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist coverage",
@@ -19,7 +32,13 @@
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f"
   },
-  "keywords": ["AI", "graph", "development", "intelligence", "neo4j"],
+  "keywords": [
+    "AI",
+    "graph",
+    "development",
+    "intelligence",
+    "neo4j"
+  ],
   "author": "LANKA Development Team",
   "license": "MIT",
   "dependencies": {
@@ -35,21 +54,30 @@
     "mongodb": "^6.3.0",
     "neo4j-driver": "^5.17.0",
     "openai": "^4.28.0",
-    "winston": "^3.11.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^10.3.1",
     "@types/express": "^4.17.21",
-    "@types/jest": "^29.5.11",
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.11.16",
+    "@types/supertest": "^6.0.2",
+    "@types/uuid": "^9.0.8",
+    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^6.20.0",
     "@typescript-eslint/parser": "^6.20.0",
+    "artillery": "^2.0.15",
+    "cucumber-html-reporter": "^7.1.1",
     "eslint": "^8.56.0",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
+    "jest-environment-node": "^29.7.0",
+    "supertest": "^6.3.4",
+    "testcontainers": "^10.6.0",
+    "ts-jest": "^29.4.1",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "ws": "^8.16.0"
   },
   "engines": {
     "node": ">=18.0.0"

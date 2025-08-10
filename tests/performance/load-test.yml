@@ -1,0 +1,348 @@
+# Artillery.js Load Test Configuration for LANKA Integration
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Warm-up phase
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm-up"
+    
+    # Ramp-up phase  
+    - duration: 120
+      arrivalRate: 10
+      rampTo: 50
+      name: "Ramp-up load"
+    
+    # Sustained load phase
+    - duration: 300
+      arrivalRate: 50
+      name: "Sustained load"
+    
+    # Peak load phase
+    - duration: 120
+      arrivalRate: 50
+      rampTo: 100
+      name: "Peak load"
+    
+    # Cool-down phase
+    - duration: 60
+      arrivalRate: 100
+      rampTo: 10
+      name: "Cool-down"
+
+  defaults:
+    headers:
+      'Content-Type': 'application/json'
+      'Accept': 'application/json'
+
+  # Performance thresholds
+  ensure:
+    p95: 2000   # 95th percentile response time should be under 2s
+    p99: 5000   # 99th percentile response time should be under 5s
+    maxErrorRate: 5%  # Error rate should not exceed 5%
+
+  # Plugin configurations
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+
+# Test scenarios
+scenarios:
+  - name: "Requirements CRUD Operations"
+    weight: 30
+    flow:
+      # Create requirement
+      - post:
+          url: "/graphql"
+          name: "Create Requirement"
+          json:
+            query: |
+              mutation CreateRequirement($input: RequirementInput!) {
+                createRequirement(input: $input) {
+                  id
+                  title
+                  description
+                  type
+                  status
+                }
+              }
+            variables:
+              input:
+                title: "Performance Test Requirement {{ $randomInt(1, 10000) }}"
+                description: "Automated performance test requirement"
+                type: "FUNCTIONAL"
+                priority: "MEDIUM"
+                projectId: "perf-test-project"
+                stakeholderId: "perf-test-stakeholder"
+          capture:
+            - json: "$.data.createRequirement.id"
+              as: "requirementId"
+      
+      # Read requirement
+      - get:
+          url: "/graphql"
+          name: "Get Requirement"
+          json:
+            query: |
+              query GetRequirement($id: ID!) {
+                requirement(id: $id) {
+                  id
+                  title
+                  description
+                  type
+                  status
+                  architectureMappings {
+                    id
+                    confidence
+                  }
+                }
+              }
+            variables:
+              id: "{{ requirementId }}"
+      
+      # Update requirement
+      - post:
+          url: "/graphql" 
+          name: "Update Requirement"
+          json:
+            query: |
+              mutation UpdateRequirement($id: ID!, $input: RequirementUpdateInput!) {
+                updateRequirement(id: $id, input: $input) {
+                  id
+                  status
+                }
+              }
+            variables:
+              id: "{{ requirementId }}"
+              input:
+                status: "APPROVED"
+
+  - name: "Architecture Decision Operations"
+    weight: 25
+    flow:
+      # Create architecture decision
+      - post:
+          url: "/graphql"
+          name: "Create Architecture Decision"
+          json:
+            query: |
+              mutation CreateDecision($input: ArchitectureDecisionInput!) {
+                createArchitectureDecision(input: $input) {
+                  id
+                  title
+                  status
+                }
+              }
+            variables:
+              input:
+                title: "Performance Test Decision {{ $randomInt(1, 10000) }}"
+                description: "Automated performance test architecture decision"
+                rationale: "Performance testing architecture decisions"
+                status: "PROPOSED"
+                alternatives: []
+                consequences: ["Performance impact", "Testing consequences"]
+          capture:
+            - json: "$.data.createArchitectureDecision.id"
+              as: "decisionId"
+      
+      # Get decision with impact analysis
+      - post:
+          url: "/graphql"
+          name: "Get Decision with Impact"
+          json:
+            query: |
+              query GetDecisionWithImpact($id: ID!) {
+                architectureDecision(id: $id) {
+                  id
+                  title
+                  status
+                  impactAnalysis {
+                    affectedRequirements
+                    changeComplexity
+                    estimatedEffort
+                  }
+                }
+              }
+            variables:
+              id: "{{ decisionId }}"
+
+  - name: "Integration Operations"
+    weight: 35
+    flow:
+      # Get integration metrics
+      - post:
+          url: "/graphql"
+          name: "Get Integration Metrics"
+          json:
+            query: |
+              query GetMetrics {
+                integrationMetrics {
+                  totalRequirements
+                  mappedRequirements
+                  unmappedRequirements
+                  averageConfidence
+                  validationCoverage
+                  alignmentDistribution {
+                    fullyAligned
+                    partiallyAligned
+                    misaligned
+                  }
+                }
+              }
+      
+      # Create requirement-architecture mapping
+      - post:
+          url: "/graphql"
+          name: "Create Mapping"
+          json:
+            query: |
+              mutation CreateMapping($input: MappingInput!) {
+                createRequirementArchitectureMapping(input: $input) {
+                  id
+                  confidence
+                  mappingType
+                }
+              }
+            variables:
+              input:
+                requirementId: "perf-test-req-{{ $randomInt(1, 100) }}"
+                architectureDecisionId: "perf-test-decision-{{ $randomInt(1, 100) }}"
+                mappingType: "DIRECT"
+                confidence: "{{ $randomFloat(0.5, 1.0) }}"
+                rationale: "Performance test mapping"
+      
+      # Perform health check
+      - post:
+          url: "/graphql"
+          name: "Health Check"
+          json:
+            query: |
+              query HealthCheck {
+                integrationHealthCheck {
+                  status
+                  issues {
+                    type
+                    severity
+                    description
+                  }
+                  metrics {
+                    totalRequirements
+                    mappedRequirements
+                  }
+                }
+              }
+
+  - name: "Complex Query Operations"
+    weight: 10
+    flow:
+      # Complex cross-module query
+      - post:
+          url: "/graphql"
+          name: "Complex Cross-Module Query"
+          json:
+            query: |
+              query ComplexQuery($projectId: ID!) {
+                requirements(projectId: $projectId) {
+                  id
+                  title
+                  type
+                  architectureMappings {
+                    id
+                    confidence
+                    mappingType
+                    architectureDecision {
+                      id
+                      title
+                      status
+                      consequences
+                    }
+                    architecturePattern {
+                      id
+                      name
+                      type
+                      components {
+                        name
+                        responsibility
+                      }
+                    }
+                  }
+                }
+                
+                architectureDecisions {
+                  id
+                  title
+                  status
+                  requirementMappings {
+                    id
+                    confidence
+                    requirement {
+                      id
+                      title
+                      type
+                      priority
+                    }
+                  }
+                }
+              }
+            variables:
+              projectId: "perf-test-project"
+
+# Custom functions for data generation
+functions:
+  randomFloat:
+    - "Math.random() * (arguments[1] - arguments[0]) + arguments[0]"
+  
+  randomInt:
+    - "Math.floor(Math.random() * (arguments[1] - arguments[0] + 1)) + arguments[0]"
+
+# Test data setup (would be run before load test)
+before:
+  flow:
+    # Create test project
+    - post:
+        url: "/graphql"
+        json:
+          query: |
+            mutation CreateProject($input: ProjectInput!) {
+              createProject(input: $input) {
+                id
+                name
+              }
+            }
+          variables:
+            input:
+              id: "perf-test-project"
+              name: "Performance Test Project"
+              description: "Project for performance testing"
+    
+    # Create test stakeholder
+    - post:
+        url: "/graphql"
+        json:
+          query: |
+            mutation CreateStakeholder($input: StakeholderInput!) {
+              createStakeholder(input: $input) {
+                id
+                name
+              }
+            }
+          variables:
+            input:
+              id: "perf-test-stakeholder"
+              name: "Performance Test Stakeholder"
+              email: "perf-test@example.com"
+              role: "BUSINESS_ANALYST"
+
+# Cleanup after test
+after:
+  flow:
+    # Clean up test data
+    - post:
+        url: "/graphql"
+        json:
+          query: |
+            mutation CleanupTestData {
+              deleteTestData(prefix: "perf-test") {
+                deletedCount
+              }
+            }

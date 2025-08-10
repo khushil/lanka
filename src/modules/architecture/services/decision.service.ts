@@ -242,6 +242,139 @@ export class ArchitectureDecisionService {
     logger.info(`Suggested patterns for decision ${decisionId}`);
   }
 
+  async getDecisionById(id: string): Promise<ArchitectureDecision | null> {
+    const query = `
+      MATCH (ad:ArchitectureDecision {id: $id})
+      OPTIONAL MATCH (ad)-[:ADDRESSES]->(r:Requirement)
+      RETURN ad, collect(r.id) as requirementIds
+    `;
+
+    const results = await this.neo4j.executeQuery(query, { id });
+    if (results.length === 0) return null;
+
+    const decision = this.mapToArchitectureDecision(results[0].ad);
+    decision.requirementIds = results[0].requirementIds;
+    return decision;
+  }
+
+  async getDecisions(filters: {
+    projectId?: string;
+    status?: ArchitectureDecisionStatus;
+    requirementId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ArchitectureDecision[]> {
+    let query = `
+      MATCH (ad:ArchitectureDecision)
+    `;
+
+    const conditions: string[] = [];
+    const params: any = {
+      limit: filters.limit || 20,
+      offset: filters.offset || 0,
+    };
+
+    if (filters.projectId) {
+      conditions.push('ad.projectId = $projectId');
+      params.projectId = filters.projectId;
+    }
+
+    if (filters.status) {
+      conditions.push('ad.status = $status');
+      params.status = filters.status;
+    }
+
+    if (filters.requirementId) {
+      query += ` MATCH (ad)-[:ADDRESSES]->(r:Requirement {id: $requirementId})`;
+      params.requirementId = filters.requirementId;
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    query += `
+      OPTIONAL MATCH (ad)-[:ADDRESSES]->(r:Requirement)
+      RETURN ad, collect(r.id) as requirementIds
+      ORDER BY ad.createdAt DESC
+      SKIP $offset
+      LIMIT $limit
+    `;
+
+    const results = await this.neo4j.executeQuery(query, params);
+    return results.map((result: any) => {
+      const decision = this.mapToArchitectureDecision(result.ad);
+      decision.requirementIds = result.requirementIds;
+      return decision;
+    });
+  }
+
+  async updateDecision(id: string, input: {
+    title?: string;
+    description?: string;
+    rationale?: string;
+    status?: ArchitectureDecisionStatus;
+    alternatives?: Alternative[];
+    consequences?: string[];
+    tradeOffs?: TradeOff[];
+  }): Promise<ArchitectureDecision | null> {
+    const updateFields: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (input.title) updateFields.title = input.title;
+    if (input.description) updateFields.description = input.description;
+    if (input.rationale) updateFields.rationale = input.rationale;
+    if (input.status) updateFields.status = input.status;
+    if (input.alternatives) updateFields.alternatives = JSON.stringify(input.alternatives);
+    if (input.consequences) updateFields.consequences = JSON.stringify(input.consequences);
+    if (input.tradeOffs) updateFields.tradeOffs = JSON.stringify(input.tradeOffs);
+
+    const setClause = Object.keys(updateFields)
+      .map(key => `ad.${key} = $${key}`)
+      .join(', ');
+
+    const query = `
+      MATCH (ad:ArchitectureDecision {id: $id})
+      SET ${setClause}
+      RETURN ad
+    `;
+
+    const results = await this.neo4j.executeQuery(query, {
+      id,
+      ...updateFields,
+    });
+
+    if (results.length === 0) return null;
+    return this.mapToArchitectureDecision(results[0].ad);
+  }
+
+  async approveDecision(id: string): Promise<ArchitectureDecision | null> {
+    return this.updateDecisionStatus(id, ArchitectureDecisionStatus.APPROVED);
+  }
+
+  async deprecateDecision(id: string, reason: string, replacementId?: string): Promise<ArchitectureDecision | null> {
+    const query = `
+      MATCH (ad:ArchitectureDecision {id: $id})
+      SET ad.status = $status,
+          ad.deprecatedAt = $deprecatedAt,
+          ad.deprecationReason = $reason,
+          ad.replacementId = $replacementId
+      RETURN ad
+    `;
+
+    const results = await this.neo4j.executeQuery(query, {
+      id,
+      status: ArchitectureDecisionStatus.DEPRECATED,
+      deprecatedAt: new Date().toISOString(),
+      reason,
+      replacementId,
+    });
+
+    if (results.length === 0) return null;
+    return this.mapToArchitectureDecision(results[0].ad);
+  }
+
   private mapToArchitectureDecision(node: any): ArchitectureDecision {
     const props = node.properties;
     return {

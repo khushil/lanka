@@ -409,7 +409,7 @@ export class TechnologyStackService {
     return scoredStacks.sort((a, b) => b.score - a.score);
   }
 
-  private async getTechnologyStackById(stackId: string): Promise<TechnologyStack | null> {
+  public async getTechnologyStackById(stackId: string): Promise<TechnologyStack | null> {
     const query = `
       MATCH (ts:TechnologyStack {id: $stackId})
       RETURN ts
@@ -685,6 +685,96 @@ export class TechnologyStackService {
     }
     
     return score;
+  }
+
+  async getTechnologyStacks(filters: {
+    teamExpertise?: number;
+    performanceRequirements?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<TechnologyStack[]> {
+    let query = `
+      MATCH (ts:TechnologyStack)
+    `;
+
+    const conditions: string[] = [];
+    const params: any = {
+      limit: filters.limit || 20,
+      offset: filters.offset || 0,
+    };
+
+    if (filters.teamExpertise) {
+      conditions.push('ts.teamExpertise >= $teamExpertise');
+      params.teamExpertise = filters.teamExpertise;
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    query += `
+      RETURN ts
+      ORDER BY ts.successRate DESC, ts.teamExpertise DESC
+      SKIP $offset
+      LIMIT $limit
+    `;
+
+    const results = await this.neo4j.executeQuery(query, params);
+    return results.map((result: any) => this.mapToTechnologyStack(result.ts));
+  }
+
+  async updateTechnologyStack(id: string, input: {
+    name?: string;
+    description?: string;
+    layers?: TechnologyLayer[];
+    compatibility?: CompatibilityMatrix;
+    performanceMetrics?: PerformanceMetrics;
+    costEstimate?: CostEstimate;
+    teamExpertise?: number;
+  }): Promise<TechnologyStack | null> {
+    const updateFields: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (input.name) updateFields.name = input.name;
+    if (input.description) updateFields.description = input.description;
+    if (input.layers) updateFields.layers = JSON.stringify(input.layers);
+    if (input.compatibility) updateFields.compatibility = JSON.stringify(input.compatibility);
+    if (input.performanceMetrics) updateFields.performanceMetrics = JSON.stringify(input.performanceMetrics);
+    if (input.costEstimate) updateFields.costEstimate = JSON.stringify(input.costEstimate);
+    if (input.teamExpertise !== undefined) updateFields.teamExpertise = input.teamExpertise;
+
+    const setClause = Object.keys(updateFields)
+      .map(key => `ts.${key} = $${key}`)
+      .join(', ');
+
+    const query = `
+      MATCH (ts:TechnologyStack {id: $id})
+      SET ${setClause}
+      RETURN ts
+    `;
+
+    const results = await this.neo4j.executeQuery(query, {
+      id,
+      ...updateFields,
+    });
+
+    if (results.length === 0) return null;
+    return this.mapToTechnologyStack(results[0].ts);
+  }
+
+  async recommendTechnologies(requirementIds: string[], patternIds: string[], constraints: string[]): Promise<any[]> {
+    // This would implement sophisticated technology recommendation logic
+    // For now, return basic technology recommendations
+    const stacks = await this.getTechnologyStacks({ limit: 3 });
+    return stacks.map(stack => ({
+      technologyStack: stack,
+      suitabilityScore: 0.75,
+      alignmentReason: 'Good fit for project requirements and patterns',
+      implementationEffort: 40,
+      learningCurveImpact: 'MODERATE',
+      riskFactors: ['Vendor dependency', 'Technology evolution risk'],
+    }));
   }
 
   private mapToTechnologyStack(node: any): TechnologyStack {

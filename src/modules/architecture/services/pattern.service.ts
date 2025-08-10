@@ -275,6 +275,113 @@ export class ArchitecturePatternService {
     }
   }
 
+  async getPatternById(id: string): Promise<ArchitecturePattern | null> {
+    const query = `
+      MATCH (ap:ArchitecturePattern {id: $id})
+      RETURN ap
+    `;
+
+    const results = await this.neo4j.executeQuery(query, { id });
+    if (results.length === 0) return null;
+    
+    return this.mapToPattern(results[0].ap);
+  }
+
+  async getPatterns(filters: {
+    type?: ArchitecturePatternType;
+    applicabilityConditions?: string[];
+    limit?: number;
+    offset?: number;
+  }): Promise<ArchitecturePattern[]> {
+    let query = `
+      MATCH (ap:ArchitecturePattern)
+    `;
+
+    const conditions: string[] = [];
+    const params: any = {
+      limit: filters.limit || 20,
+      offset: filters.offset || 0,
+    };
+
+    if (filters.type) {
+      conditions.push('ap.type = $type');
+      params.type = filters.type;
+    }
+
+    if (filters.applicabilityConditions && filters.applicabilityConditions.length > 0) {
+      conditions.push('ANY(condition IN ap.applicabilityConditions WHERE condition IN $conditions)');
+      params.conditions = filters.applicabilityConditions;
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    query += `
+      RETURN ap
+      ORDER BY ap.successRate DESC, ap.adoptionCount DESC
+      SKIP $offset
+      LIMIT $limit
+    `;
+
+    const results = await this.neo4j.executeQuery(query, params);
+    return results.map((result: any) => this.mapToPattern(result.ap));
+  }
+
+  async updatePattern(id: string, input: {
+    name?: string;
+    type?: ArchitecturePatternType;
+    description?: string;
+    applicabilityConditions?: string[];
+    components?: PatternComponent[];
+    qualityAttributes?: QualityAttribute[];
+    knownUses?: string[];
+  }): Promise<ArchitecturePattern | null> {
+    const updateFields: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (input.name) updateFields.name = input.name;
+    if (input.type) updateFields.type = input.type;
+    if (input.description) updateFields.description = input.description;
+    if (input.applicabilityConditions) updateFields.applicabilityConditions = JSON.stringify(input.applicabilityConditions);
+    if (input.components) updateFields.components = JSON.stringify(input.components);
+    if (input.qualityAttributes) updateFields.qualityAttributes = JSON.stringify(input.qualityAttributes);
+    if (input.knownUses) updateFields.knownUses = JSON.stringify(input.knownUses);
+
+    const setClause = Object.keys(updateFields)
+      .map(key => `ap.${key} = $${key}`)
+      .join(', ');
+
+    const query = `
+      MATCH (ap:ArchitecturePattern {id: $id})
+      SET ${setClause}
+      RETURN ap
+    `;
+
+    const results = await this.neo4j.executeQuery(query, {
+      id,
+      ...updateFields,
+    });
+
+    if (results.length === 0) return null;
+    return this.mapToPattern(results[0].ap);
+  }
+
+  async recommendPatterns(requirementIds: string[], constraints: string[]): Promise<any[]> {
+    // This would implement sophisticated pattern recommendation logic
+    // For now, return basic pattern recommendations
+    const patterns = await this.getPatterns({ limit: 5 });
+    return patterns.map(pattern => ({
+      pattern,
+      applicabilityScore: 0.8,
+      benefits: ['Proven architecture pattern', 'Good community support'],
+      risks: ['Learning curve required', 'May be over-engineering for simple use cases'],
+      implementationComplexity: 'MEDIUM',
+      prerequisites: ['Understanding of pattern concepts'],
+    }));
+  }
+
   private mapToPattern(node: any): ArchitecturePattern {
     const props = node.properties;
     return {
