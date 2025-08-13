@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LANKA - Intelligent Software Development Lifecycle Platform</title>
+    <meta name="description" content="Transform your development process with LANKA - an AI-powered platform that turns code into permanent organizational intelligence.">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="site/assets/images/favicon.png">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="site/assets/css/style.css">
+    
+    <!-- Highlight.js for code syntax -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="#home">
+                    <span class="logo">🚀</span>
+                    <span class="brand-text">LANKA</span>
+                </a>
+            </div>
+            <div class="nav-menu" id="navMenu">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#architecture" class="nav-link">Architecture</a>
+                <a href="#getting-started" class="nav-link">Get Started</a>
+                <a href="#documentation" class="nav-link">Docs</a>
+                <a href="https://github.com/khushil/lanka" class="nav-link"><i class="fab fa-github"></i> GitHub</a>
+            </div>
+            <div class="nav-toggle" id="navToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">
+                    Transform Code into <span class="gradient-text">Intelligence</span>
+                </h1>
+                <p class="hero-subtitle">
+                    LANKA revolutionizes software development by creating a persistent knowledge graph 
+                    that learns from every line of code, requirement, and architectural decision.
+                </p>
+                <div class="hero-buttons">
+                    <a href="#getting-started" class="btn btn-primary">
+                        <i class="fas fa-rocket"></i> Get Started
+                    </a>
+                    <a href="https://github.com/khushil/lanka" class="btn btn-secondary">
+                        <i class="fab fa-github"></i> View on GitHub
+                    </a>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <span class="stat-value">40%</span>
+                        <span class="stat-label">Faster Development</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">85%</span>
+                        <span class="stat-label">Code Reuse</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">Zero</span>
+                        <span class="stat-label">Knowledge Loss</span>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="code-animation">
+                    <pre><code class="language-typescript">// Transform requirements into intelligence
+const requirement = await lanka.requirements.create({
+  title: "User Authentication",
+  description: "Secure login with MFA"
+});
+
+// AI generates optimized architecture
+const architecture = await lanka.architecture.generate(requirement);
+
+// Automatic code generation with tests
+const implementation = await lanka.development.implement(architecture);
+
+// Knowledge graph learns and improves
+await lanka.knowledge.persist(implementation);</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Intelligent Features for Modern Development</h2>
+                <p>Every feature designed to amplify your team's capabilities</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3>Knowledge Graph</h3>
+                    <p>Persistent organizational memory that captures and connects every piece of development knowledge.</p>
+                    <ul class="feature-list">
+                        <li>Cross-project learning</li>
+                        <li>Pattern recognition</li>
+                        <li>Automatic documentation</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <h3>AI-Powered Development</h3>
+                    <p>Intelligent code generation and suggestions based on your entire codebase history.</p>
+                    <ul class="feature-list">
+                        <li>Context-aware generation</li>
+                        <li>Smart refactoring</li>
+                        <li>Bug prediction</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-project-diagram"></i>
+                    </div>
+                    <h3>Architecture Intelligence</h3>
+                    <p>AI-assisted system design with automatic optimization and pattern detection.</p>
+                    <ul class="feature-list">
+                        <li>Design pattern suggestions</li>
+                        <li>Performance optimization</li>
+                        <li>Security analysis</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <h3>Complete SDLC Coverage</h3>
+                    <p>Integrated intelligence across requirements, development, testing, and deployment.</p>
+                    <ul class="feature-list">
+                        <li>Requirements traceability</li>
+                        <li>Automated testing</li>
+                        <li>Smart CI/CD</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3>Enterprise Security</h3>
+                    <p>Built-in security best practices with automated vulnerability detection.</p>
+                    <ul class="feature-list">
+                        <li>Role-based access</li>
+                        <li>Audit trails</li>
+                        <li>Compliance ready</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3>Performance Analytics</h3>
+                    <p>Real-time insights into development velocity and code quality metrics.</p>
+                    <ul class="feature-list">
+                        <li>Development metrics</li>
+                        <li>Quality tracking</li>
+                        <li>Bottleneck detection</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section id="architecture" class="architecture">
+        <div class="container">
+            <div class="section-header">
+                <h2>Powerful Architecture</h2>
+                <p>Built for scale, designed for intelligence</p>
+            </div>
+            <div class="architecture-diagram">
+                <div class="arch-layer">
+                    <h4>Client Layer</h4>
+                    <div class="arch-components">
+                        <span class="arch-component">Web UI</span>
+                        <span class="arch-component">CLI</span>
+                        <span class="arch-component">IDE Plugins</span>
+                        <span class="arch-component">API Clients</span>
+                    </div>
+                </div>
+                <div class="arch-layer">
+                    <h4>API Gateway</h4>
+                    <div class="arch-components">
+                        <span class="arch-component">REST</span>
+                        <span class="arch-component">GraphQL</span>
+                        <span class="arch-component">WebSocket</span>
+                        <span class="arch-component">gRPC</span>
+                    </div>
+                </div>
+                <div class="arch-layer">
+                    <h4>Intelligence Modules</h4>
+                    <div class="arch-components">
+                        <span class="arch-component">Requirements AI</span>
+                        <span class="arch-component">Architecture AI</span>
+                        <span class="arch-component">Development AI</span>
+                        <span class="arch-component">Testing AI</span>
+                    </div>
+                </div>
+                <div class="arch-layer">
+                    <h4>Core Services</h4>
+                    <div class="arch-components">
+                        <span class="arch-component">Neo4j Graph</span>
+                        <span class="arch-component">ML Pipeline</span>
+                        <span class="arch-component">Security</span>
+                        <span class="arch-component">Analytics</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Getting Started Section -->
+    <section id="getting-started" class="getting-started">
+        <div class="container">
+            <div class="section-header">
+                <h2>Get Started in Minutes</h2>
+                <p>From installation to your first intelligent application</p>
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Install Prerequisites</h3>
+                    <pre><code class="language-bash"># Install Node.js 20+
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Install Neo4j
+wget -O neo4j.deb https://neo4j.com/download/
+sudo dpkg -i neo4j.deb</code></pre>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Clone & Configure</h3>
+                    <pre><code class="language-bash"># Clone repository
+git clone https://github.com/khushil/lanka.git
+cd lanka
+
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+nano .env  # Add your Neo4j credentials</code></pre>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Initialize & Run</h3>
+                    <pre><code class="language-bash"># Initialize database
+npm run db:init
+
+# Start development server
+npm run dev
+
+# Access at http://localhost:3000</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Documentation Section -->
+    <section id="documentation" class="documentation">
+        <div class="container">
+            <div class="section-header">
+                <h2>Comprehensive Documentation</h2>
+                <p>Everything you need to master LANKA</p>
+            </div>
+            <div class="docs-grid">
+                <a href="site/getting-started.html" class="doc-card">
+                    <i class="fas fa-rocket"></i>
+                    <h3>Getting Started</h3>
+                    <p>Quick setup guide and first project walkthrough</p>
+                </a>
+                <a href="architecture.html" class="doc-card">
+                    <i class="fas fa-sitemap"></i>
+                    <h3>Architecture</h3>
+                    <p>Deep dive into system design and components</p>
+                </a>
+                <a href="site/api-reference.html" class="doc-card">
+                    <i class="fas fa-code"></i>
+                    <h3>API Reference</h3>
+                    <p>Complete API documentation with examples</p>
+                </a>
+                <a href="site/modules.html" class="doc-card">
+                    <i class="fas fa-cubes"></i>
+                    <h3>Modules</h3>
+                    <p>Detailed guides for each intelligence module</p>
+                </a>
+                <a href="site/best-practices.html" class="doc-card">
+                    <i class="fas fa-medal"></i>
+                    <h3>Best Practices</h3>
+                    <p>Recommended patterns and workflows</p>
+                </a>
+                <a href="https://github.com/khushil/lanka/issues" class="doc-card">
+                    <i class="fas fa-life-ring"></i>
+                    <h3>Support</h3>
+                    <p>Get help from the community</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <h2>Ready to Transform Your Development?</h2>
+            <p>Join thousands of developers building smarter with LANKA</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/khushil/lanka" class="btn btn-primary btn-lg">
+                    <i class="fab fa-github"></i> Start Building
+                </a>
+                <a href="site/getting-started.html" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-book"></i> Read Docs
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>LANKA Platform</h4>
+                    <p>Transforming code into organizational intelligence</p>
+                    <div class="social-links">
+                        <a href="https://github.com/khushil/lanka"><i class="fab fa-github"></i></a>
+                        <a href="https://twitter.com/lankaplatform"><i class="fab fa-twitter"></i></a>
+                        <a href="https://discord.gg/lanka"><i class="fab fa-discord"></i></a>
+                    </div>
+                </div>
+                <div class="footer-section">
+                    <h4>Documentation</h4>
+                    <ul>
+                        <li><a href="site/getting-started.html">Getting Started</a></li>
+                        <li><a href="architecture.html">Architecture</a></li>
+                        <li><a href="site/api-reference.html">API Reference</a></li>
+                        <li><a href="site/modules.html">Modules</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="https://github.com/khushil/lanka">GitHub</a></li>
+                        <li><a href="https://discord.gg/lanka">Discord</a></li>
+                        <li><a href="https://github.com/khushil/lanka/issues">Support</a></li>
+                        <li><a href="https://github.com/khushil/lanka/discussions">Discussions</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="site/blog.html">Blog</a></li>
+                        <li><a href="site/roadmap.html">Roadmap</a></li>
+                        <li><a href="site/changelog.html">Changelog</a></li>
+                        <li><a href="LICENSE">License</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 LANKA Platform. Licensed under CC BY-NC-ND 4.0</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="site/assets/js/main.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
+</body>
+</html>

@@ -273,11 +273,11 @@ See [LICENSE](LICENSE) file for details.
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/lanka&type=Date)](https://star-history.com/#yourusername/lanka&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=khushil/lanka&type=Date)](https://star-history.com/#khushil/lanka&Date)
 
 ## 💬 Community & Support
 
-- **Discord**: [Join our community](https://discord.gg/lanka)
+- **Discord**: [Join our community](https://discord.gg/lankaplatform)
 - **Twitter**: [@LankaPlatform](https://twitter.com/lankaplatform)
 - **Blog**: [lanka-platform.com/blog](https://lanka-platform.com/blog)
 - **Email**: support@lanka-platform.com

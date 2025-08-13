@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Started - LANKA Platform</title>
+    <meta name="description" content="Get started with LANKA - comprehensive setup guide and first project walkthrough">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="../index.html">
+                    <span class="logo">🚀</span>
+                    <span class="brand-text">LANKA</span>
+                </a>
+            </div>
+            <div class="nav-menu" id="navMenu">
+                <a href="../index.html#features" class="nav-link">Features</a>
+                <a href="../index.html#architecture" class="nav-link">Architecture</a>
+                <a href="getting-started.html" class="nav-link active">Get Started</a>
+                <a href="../index.html#documentation" class="nav-link">Docs</a>
+                <a href="https://github.com/khushil/lanka" class="nav-link"><i class="fab fa-github"></i> GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <main class="documentation-page" style="padding-top: 100px;">
+        <div class="container">
+            <div class="doc-header">
+                <h1>Getting Started with LANKA</h1>
+                <p class="lead">From zero to your first intelligent application in 15 minutes</p>
+            </div>
+
+            <div class="doc-content">
+                <section class="doc-section">
+                    <h2>Prerequisites</h2>
+                    <p>Before installing LANKA, ensure you have the following:</p>
+                    
+                    <div class="requirement-cards">
+                        <div class="req-card">
+                            <h4>Node.js 20+</h4>
+                            <p>Required for running the platform</p>
+                            <pre><code class="language-bash"># Check version
+node --version
+
+# Install Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs</code></pre>
+                        </div>
+                        
+                        <div class="req-card">
+                            <h4>Neo4j 5.0+</h4>
+                            <p>Graph database for knowledge storage</p>
+                            <pre><code class="language-bash"># Download and install
+wget -O neo4j.deb https://neo4j.com/download-center/
+sudo dpkg -i neo4j.deb
+sudo systemctl start neo4j</code></pre>
+                        </div>
+                        
+                        <div class="req-card">
+                            <h4>Git 2.34+</h4>
+                            <p>Version control system</p>
+                            <pre><code class="language-bash"># Check version
+git --version
+
+# Install/update Git
+sudo apt-get update
+sudo apt-get install git</code></pre>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="doc-section">
+                    <h2>Installation</h2>
+                    
+                    <h3>Step 1: Clone the Repository</h3>
+                    <pre><code class="language-bash">git clone https://github.com/khushil/lanka.git
+cd lanka</code></pre>
+
+                    <h3>Step 2: Install Dependencies</h3>
+                    <pre><code class="language-bash">npm install</code></pre>
+
+                    <h3>Step 3: Configure Environment</h3>
+                    <pre><code class="language-bash"># Copy environment template
+cp .env.example .env
+
+# Edit configuration
+nano .env</code></pre>
+
+                    <p>Update the following variables in your `.env` file:</p>
+                    <pre><code class="language-env"># Neo4j Configuration
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-password
+
+# API Configuration  
+API_PORT=3000
+API_HOST=localhost
+
+# AI/ML Configuration (Optional)
+OPENAI_API_KEY=your-api-key
+MODEL_PATH=./models
+
+# Security
+JWT_SECRET=generate-a-secure-secret
+ENCRYPTION_KEY=generate-encryption-key</code></pre>
+
+                    <h3>Step 4: Initialize Database</h3>
+                    <pre><code class="language-bash"># Create database schema
+npm run db:init
+
+# Seed with sample data (optional)
+npm run db:seed</code></pre>
+
+                    <h3>Step 5: Start the Platform</h3>
+                    <pre><code class="language-bash"># Development mode with hot reload
+npm run dev
+
+# Production mode
+npm run build
+npm start</code></pre>
+                </section>
+
+                <section class="doc-section">
+                    <h2>Your First LANKA Project</h2>
+                    
+                    <h3>1. Create a New Project</h3>
+                    <pre><code class="language-typescript">import { Lanka } from '@lanka/core';
+
+// Initialize LANKA client
+const lanka = new Lanka({
+  apiUrl: 'http://localhost:3000',
+  apiKey: 'your-api-key'
+});
+
+// Create a new project
+const project = await lanka.projects.create({
+  name: 'My First Project',
+  description: 'E-commerce platform with AI recommendations',
+  type: 'web-application'
+});</code></pre>
+
+                    <h3>2. Define Requirements</h3>
+                    <pre><code class="language-typescript">// Add requirements using natural language
+const requirements = await lanka.requirements.createBatch([
+  {
+    title: 'User Authentication',
+    description: 'Users should be able to register and login with email and password',
+    priority: 'HIGH',
+    acceptanceCriteria: [
+      'Email validation',
+      'Password strength requirements',
+      'Remember me functionality'
+    ]
+  },
+  {
+    title: 'Product Catalog',
+    description: 'Display products with search and filter capabilities',
+    priority: 'HIGH',
+    acceptanceCriteria: [
+      'Product search by name',
+      'Filter by category and price',
+      'Sort by popularity and price'
+    ]
+  }
+]);</code></pre>
+
+                    <h3>3. Generate Architecture</h3>
+                    <pre><code class="language-typescript">// AI generates optimal architecture
+const architecture = await lanka.architecture.generate({
+  projectId: project.id,
+  requirements: requirements.map(r => r.id),
+  preferences: {
+    style: 'microservices',
+    database: 'postgresql',
+    frontend: 'react',
+    deployment: 'kubernetes'
+  }
+});
+
+console.log(architecture);
+// Output: Complete architecture with services, APIs, and data models</code></pre>
+
+                    <h3>4. Generate Implementation</h3>
+                    <pre><code class="language-typescript">// Generate code for each service
+const services = await lanka.development.generateServices(architecture);
+
+for (const service of services) {
+  console.log(`Generated ${service.name}:`);
+  console.log(`- Controllers: ${service.controllers.length}`);
+  console.log(`- Models: ${service.models.length}`);
+  console.log(`- Tests: ${service.tests.length}`);
+  
+  // Export generated code
+  await lanka.development.export(service, `./output/${service.name}`);
+}</code></pre>
+
+                    <h3>5. Generate Tests</h3>
+                    <pre><code class="language-typescript">// Automatic test generation
+const testSuite = await lanka.testing.generateSuite({
+  services: services.map(s => s.id),
+  coverage: {
+    unit: true,
+    integration: true,
+    e2e: true
+  },
+  edgeCases: true
+});
+
+// Run tests
+const results = await lanka.testing.run(testSuite);
+console.log(`Test Results: ${results.passed}/${results.total} passed`);</code></pre>
+                </section>
+
+                <section class="doc-section">
+                    <h2>CLI Usage</h2>
+                    
+                    <p>LANKA includes a powerful CLI for common operations:</p>
+                    
+                    <pre><code class="language-bash"># Initialize a new project
+lanka init my-project
+
+# Add requirements from file
+lanka requirements add requirements.yaml
+
+# Generate architecture
+lanka architecture generate --style microservices
+
+# Generate code
+lanka develop --service user-service
+
+# Run tests
+lanka test --coverage
+
+# Deploy to cloud
+lanka deploy --env production
+
+# View project status
+lanka status</code></pre>
+                </section>
+
+                <section class="doc-section">
+                    <h2>IDE Integration</h2>
+                    
+                    <h3>VS Code Extension</h3>
+                    <pre><code class="language-bash"># Install from VS Code marketplace
+code --install-extension lanka.vscode-lanka</code></pre>
+                    
+                    <p>Features:</p>
+                    <ul>
+                        <li>IntelliSense for LANKA APIs</li>
+                        <li>Real-time code suggestions</li>
+                        <li>Integrated knowledge graph viewer</li>
+                        <li>One-click deployment</li>
+                    </ul>
+
+                    <h3>IntelliJ Plugin</h3>
+                    <p>Coming soon - Q2 2025</p>
+                </section>
+
+                <section class="doc-section">
+                    <h2>Docker Setup (Alternative)</h2>
+                    
+                    <pre><code class="language-yaml"># docker-compose.yml
+version: '3.8'
+
+services:
+  lanka:
+    image: lanka/platform:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=lanka123
+    depends_on:
+      - neo4j
+  
+  neo4j:
+    image: neo4j:5.0
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/lanka123
+    volumes:
+      - neo4j_data:/data
+
+volumes:
+  neo4j_data:</code></pre>
+
+                    <pre><code class="language-bash"># Start with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down</code></pre>
+                </section>
+
+                <section class="doc-section">
+                    <h2>Next Steps</h2>
+                    
+                    <div class="next-steps-grid">
+                        <a href="api-reference.html" class="next-step-card">
+                            <i class="fas fa-code"></i>
+                            <h4>API Reference</h4>
+                            <p>Complete API documentation</p>
+                        </a>
+                        
+                        <a href="modules.html" class="next-step-card">
+                            <i class="fas fa-cubes"></i>
+                            <h4>Module Guides</h4>
+                            <p>Deep dive into each module</p>
+                        </a>
+                        
+                        <a href="best-practices.html" class="next-step-card">
+                            <i class="fas fa-medal"></i>
+                            <h4>Best Practices</h4>
+                            <p>Patterns and workflows</p>
+                        </a>
+                        
+                        <a href="https://github.com/khushil/lanka/tree/main/examples" class="next-step-card">
+                            <i class="fas fa-flask"></i>
+                            <h4>Examples</h4>
+                            <p>Sample projects and code</p>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="doc-section">
+                    <h2>Troubleshooting</h2>
+                    
+                    <details>
+                        <summary>Neo4j connection failed</summary>
+                        <div class="troubleshoot-content">
+                            <p>Check that Neo4j is running:</p>
+                            <pre><code class="language-bash">sudo systemctl status neo4j</code></pre>
+                            <p>Verify connection details in `.env` file match your Neo4j configuration.</p>
+                        </div>
+                    </details>
+                    
+                    <details>
+                        <summary>Port 3000 already in use</summary>
+                        <div class="troubleshoot-content">
+                            <p>Change the port in `.env`:</p>
+                            <pre><code class="language-env">API_PORT=3001</code></pre>
+                            <p>Or kill the process using port 3000:</p>
+                            <pre><code class="language-bash">lsof -i :3000
+kill -9 [PID]</code></pre>
+                        </div>
+                    </details>
+                    
+                    <details>
+                        <summary>npm install fails</summary>
+                        <div class="troubleshoot-content">
+                            <p>Clear npm cache and retry:</p>
+                            <pre><code class="language-bash">npm cache clean --force
+rm -rf node_modules package-lock.json
+npm install</code></pre>
+                        </div>
+                    </details>
+                </section>
+
+                <section class="doc-section">
+                    <h2>Get Help</h2>
+                    
+                    <p>Need assistance? We're here to help!</p>
+                    
+                    <ul>
+                        <li>📚 Check our <a href="../index.html#documentation">documentation</a></li>
+                        <li>💬 Join our <a href="https://discord.gg/lanka">Discord community</a></li>
+                        <li>🐛 Report issues on <a href="https://github.com/khushil/lanka/issues">GitHub</a></li>
+                        <li>📧 Email support at <a href="mailto:support@lanka-platform.com">support@lanka-platform.com</a></li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>&copy; 2025 LANKA Platform. Licensed under CC BY-NC-ND 4.0</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Additional Styles for Documentation Page -->
+    <style>
+        .documentation-page {
+            min-height: 100vh;
+            background: var(--dark-bg);
+        }
+        
+        .doc-header {
+            margin-bottom: 3rem;
+        }
+        
+        .doc-header h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .lead {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+        }
+        
+        .doc-content {
+            max-width: 900px;
+        }
+        
+        .doc-section {
+            margin-bottom: 4rem;
+        }
+        
+        .doc-section h2 {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+        
+        .doc-section h3 {
+            font-size: 1.5rem;
+            margin: 2rem 0 1rem;
+            color: var(--primary-color);
+        }
+        
+        .doc-section p {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+        
+        .doc-section ul {
+            color: var(--text-secondary);
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .doc-section pre {
+            background: var(--dark-surface);
+            border: 1px solid var(--dark-border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+        
+        .requirement-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .req-card {
+            background: var(--dark-surface);
+            border: 1px solid var(--dark-border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+        }
+        
+        .req-card h4 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .next-steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .next-step-card {
+            background: var(--dark-surface);
+            border: 1px solid var(--dark-border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text-primary);
+            transition: all 0.3s;
+        }
+        
+        .next-step-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .next-step-card i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+        
+        .next-step-card h4 {
+            margin-bottom: 0.5rem;
+        }
+        
+        .next-step-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        details {
+            background: var(--dark-surface);
+            border: 1px solid var(--dark-border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        details summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        
+        .troubleshoot-content {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--dark-border);
+        }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="assets/js/main.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
+</body>
+</html>

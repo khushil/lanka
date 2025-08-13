@@ -1,0 +1,103 @@
+# Jekyll Configuration for LANKA GitHub Pages
+
+# Site Settings
+title: LANKA - Intelligent Software Development Lifecycle Platform
+description: Transform your development process with LANKA - an AI-powered platform that turns code into permanent organizational intelligence.
+author: LANKA Team
+email: support@lanka-platform.com
+url: "https://khushil.github.io"
+baseurl: "/lanka"
+
+# Social Links
+github_username: khushil
+twitter_username: lankaplatform
+
+# Build Settings
+markdown: kramdown
+theme: null  # We're using custom theme
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Markdown Processing
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+    block:
+      line_numbers: true
+
+# Collections
+collections:
+  docs:
+    output: true
+    permalink: /:collection/:name
+  tutorials:
+    output: true
+    permalink: /:collection/:name
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "docs"
+    values:
+      layout: "documentation"
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      author: "LANKA Team"
+
+# Exclude from build
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .sass-cache
+  - .jekyll-cache
+  - .jekyll-metadata
+  - .gitignore
+  - README.md
+  - LICENSE
+  - package.json
+  - package-lock.json
+  - src/
+  - tests/
+  - scripts/
+  - config/
+  - .env
+  - .env.example
+  - docker-compose.yml
+  - Dockerfile
+
+# Include in build
+include:
+  - _pages
+  - site
+
+# Pagination
+paginate: 10
+paginate_path: "/blog/page:num/"
+
+# Analytics (Optional - add your tracking ID)
+google_analytics: # UA-XXXXXXXXX-X
+
+# Disqus Comments (Optional)
+disqus:
+  shortname: # lanka-platform
+
+# SEO
+logo: /site/assets/images/logo.png
+social:
+  name: LANKA Platform
+  links:
+    - https://github.com/khushil/lanka
+    - https://twitter.com/lankaplatform
+
+# Timezone
+timezone: UTC
