@@ -72,7 +72,9 @@ claude-flow
 claude-flow.bat
 claude-flow.ps1
 hive-mind-prompt-*.txt
+# Claude Flow metrics (auto-updated files)
 .claude-flow/metrics/
+**/.claude-flow/metrics/
 
 # Python
 __pycache__/
