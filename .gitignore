@@ -1,3 +1,52 @@
+# Dependencies
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Production builds
+build/
+dist/
+**/build/
+**/dist/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+**/coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids/
+lib-cov/
+*.tsbuildinfo
 
 # Claude Flow generated files
 .claude/settings.local.json
@@ -23,3 +72,71 @@ claude-flow
 claude-flow.bat
 claude-flow.ps1
 hive-mind-prompt-*.txt
+.claude-flow/metrics/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+
+# Docker
+.dockerignore
+
+# Git
+*.orig
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# MongoDB
+*.lock
+
+# Neo4j
+neo4j/data/
+neo4j/logs/
+neo4j/import/
+neo4j/plugins/
+
+# Elasticsearch
+elasticsearch/data/
+elasticsearch/logs/
+
+# Client specific (React)
+client/node_modules/
+client/build/
+client/.pnp
+client/.pnp.js
+client/coverage/
+client/npm-debug.log*
+client/yarn-debug.log*
+client/yarn-error.log*
