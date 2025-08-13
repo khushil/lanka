@@ -1,0 +1,46 @@
+# <type>(<scope>): <subject> (max 50 chars)
+# |<----  Using a Maximum Of 50 Characters  ---->|
+
+# Explain why this change is being made
+# |<----   Try To Limit Each Line to 72 Characters   ---->|
+
+# Provide links or keys to any relevant tickets, issues, or discussions
+# Fixes: #
+# Implements: #
+# Relates-to: #
+
+# Remember to sign-off your commit
+# Signed-off-by: Your Name <your.email@example.com>
+
+# --- COMMIT END ---
+# Type can be:
+#   feat     - new feature
+#   fix      - bug fix
+#   perf     - performance improvement
+#   refactor - code change that neither fixes a bug nor adds a feature
+#   style    - formatting, missing semi colons, etc; no code change
+#   test     - adding or refactoring tests; no production code change
+#   docs     - changes to documentation
+#   build    - changes to build process or auxiliary tools
+#   ci       - changes to CI configuration files and scripts
+#   chore    - updating grunt tasks etc; no production code change
+#   revert   - revert a previous commit
+#   security - security fixes
+#
+# Scope can be:
+#   core     - core system functionality
+#   api      - API endpoints and GraphQL
+#   db       - database layer
+#   auth     - authentication and authorization
+#   ui       - user interface components
+#   cache    - caching layer
+#   queue    - message queue system
+#   ml       - machine learning components
+#
+# Remember:
+#   - Use imperative mood in subject line
+#   - Do not end subject line with a period
+#   - Separate subject from body with a blank line
+#   - Use the body to explain what and why vs. how
+#   - Can use multiple lines with "-" for bullet points in body
+# ------------------------ >8 ------------------------

@@ -59,8 +59,8 @@ The system is designed as three interconnected modules that share a common graph
 ### 2.1 Primary Technologies
 
 #### Graph Database Layer
-- **Primary Store**: Neo4j Enterprise Edition 5.x
-  - Clustering support for high availability
+- **Primary Store**: Neo4j Community Edition 5.x
+  - Single instance deployment
   - ACID compliance for data integrity
   - Native graph algorithms for pattern detection
   - Full-text search capabilities
@@ -736,7 +736,7 @@ Success depends on careful execution of the implementation roadmap, strong chang
 ### A. Technology Decision Records
 
 #### ADR-001: Graph Database Selection
-**Decision**: Neo4j Enterprise Edition
+**Decision**: Neo4j Community Edition
 **Rationale**: Native graph performance, ACID compliance, enterprise support, proven scalability
 **Alternatives Considered**: Amazon Neptune, ArangoDB, TigerGraph
 

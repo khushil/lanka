@@ -165,8 +165,7 @@ setup_environment() {
         docker run -d --name neo4j-test \
             -p 7474:7474 -p 7687:7687 \
             -e NEO4J_AUTH=neo4j/testpassword \
-            -e NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
-            neo4j:5-enterprise
+            neo4j:5-community
         
         # Wait for Neo4j to be ready
         log_info "Waiting for Neo4j to be ready..."

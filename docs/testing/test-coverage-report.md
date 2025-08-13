@@ -212,7 +212,7 @@ This document provides a comprehensive analysis of the integration test coverage
 ## Test Environment Configuration
 
 ### Infrastructure
-- **Neo4j**: 5-enterprise with 2GB heap
+- **Neo4j**: 5-community with 2GB heap
 - **Test Containers**: Isolated per test suite
 - **Parallel Execution**: 6 concurrent test suites
 - **CI/CD Integration**: GitHub Actions with matrix strategy

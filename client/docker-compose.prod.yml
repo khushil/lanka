@@ -1,0 +1,76 @@
+version: '3.8'
+
+# Production-specific overrides for docker-compose.yml
+services:
+  lanka-ui:
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=https://api.lanka.com
+      - REACT_APP_WEBSOCKET_URL=wss://api.lanka.com
+      - REACT_APP_GRAPHQL_URL=https://api.lanka.com/graphql
+      - REACT_APP_ENABLE_DEBUG_MODE=false
+      - REACT_APP_ENABLE_DEVELOPMENT_TOOLS=false
+      - REACT_APP_SENTRY_DSN=${SENTRY_DSN}
+      - REACT_APP_GOOGLE_ANALYTICS_ID=${GOOGLE_ANALYTICS_ID}
+    ports:
+      - "80:3000"
+      - "443:3000"
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  lanka-api:
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  redis:
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  postgres:
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+volumes:
+  postgres_data_prod:
+    driver: local

@@ -1,0 +1,8 @@
+{
+  "status": "healthy",
+  "service": "lanka-ui",
+  "version": "1.0.0",
+  "timestamp": "2025-08-12T00:00:00.000Z",
+  "uptime": "up",
+  "environment": "production"
+}

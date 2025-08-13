@@ -8,12 +8,11 @@ export default async function globalSetup(): Promise<void> {
 
   try {
     // Start Neo4j test container
-    neo4jContainer = await new Neo4jContainer('neo4j:5-enterprise')
+    neo4jContainer = await new Neo4jContainer('neo4j:5-community')
       .withAuthentication('neo4j', 'testpassword')
       .withAdminPassword('testpassword')
       .withApoc()
       .withEnvironment({
-        'NEO4J_ACCEPT_LICENSE_AGREEMENT': 'yes',
         'NEO4J_dbms_memory_pagecache_size': '512M',
         'NEO4J_dbms_memory_heap_initial__size': '512M',
         'NEO4J_dbms_memory_heap_max__size': '1G',

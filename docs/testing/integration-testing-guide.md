@@ -234,7 +234,7 @@ The test infrastructure uses Neo4j test containers for isolated testing:
 ```typescript
 // Integration tests automatically start Neo4j container
 export default async function globalSetup(): Promise<void> {
-  neo4jContainer = await new Neo4jContainer('neo4j:5-enterprise')
+  neo4jContainer = await new Neo4jContainer('neo4j:5-community')
     .withAuthentication('neo4j', 'testpassword')
     .withApoc()
     .start();
@@ -406,7 +406,7 @@ Tests run in parallel across multiple test suites:
 ### Integration Services
 
 CI/CD pipeline includes:
-- Neo4j Enterprise container
+- Neo4j Community container
 - MongoDB container
 - Redis container
 - Automated database initialization
