@@ -4,6 +4,40 @@
 
 The LANKA GraphQL API provides a powerful, flexible interface for querying requirements and architecture data with rich relationship traversal capabilities. The schema supports both standalone operations and cross-module integration queries.
 
+```mermaid
+graph TB
+    subgraph "Client Applications"
+        WA[Web App]
+        MA[Mobile App]
+        TP[Third Party]
+    end
+    
+    subgraph "GraphQL Layer"
+        GQL[GraphQL API<br/>POST /graphql]
+        AUTH[JWT Authentication]
+        RL[Rate Limiting]
+    end
+    
+    subgraph "Core Domains"
+        REQ[Requirements<br/>Module]
+        ARCH[Architecture<br/>Module]
+        AI[AI Analysis<br/>Engine]
+    end
+    
+    WA --> AUTH
+    MA --> AUTH
+    TP --> AUTH
+    AUTH --> GQL
+    GQL --> RL
+    RL --> REQ
+    RL --> ARCH
+    RL --> AI
+    
+    style GQL fill:#f9f,stroke:#333,stroke-width:4px
+    style AUTH fill:#bbf,stroke:#333,stroke-width:2px
+    style AI fill:#fbb,stroke:#333,stroke-width:2px
+```
+
 ## Endpoint
 
 ```
@@ -24,6 +58,51 @@ Authorization: Bearer <your-jwt-token>
 ---
 
 ## Core Types
+
+### Type Relationships Overview
+
+```mermaid
+erDiagram
+    Requirement ||--o{ RequirementArchitectureMapping : "maps to"
+    Requirement ||--o{ SimilarRequirement : "similar to"
+    Requirement ||--o{ RequirementConflict : "conflicts with"
+    Requirement }o--o{ Requirement : "depends on"
+    
+    ArchitectureDecision ||--o{ RequirementArchitectureMapping : "implements"
+    ArchitectureDecision ||--o{ Alternative : "has"
+    ArchitectureDecision ||--o{ TradeOff : "considers"
+    ArchitectureDecision }o--|| TechnologyStack : "uses"
+    ArchitectureDecision }o--o{ ArchitecturePattern : "applies"
+    
+    ArchitecturePattern ||--o{ PatternComponent : "contains"
+    ArchitecturePattern ||--o{ QualityAttribute : "provides"
+    ArchitecturePattern ||--o{ PatternRecommendation : "recommends"
+    
+    RequirementArchitectureMapping ||--o{ ArchitecturalTradeOff : "involves"
+    
+    Requirement {
+        ID id PK
+        String title
+        String description
+        RequirementType type
+        RequirementStatus status
+        RequirementPriority priority
+    }
+    
+    ArchitectureDecision {
+        ID id PK
+        String title
+        String rationale
+        ArchitectureDecisionStatus status
+    }
+    
+    ArchitecturePattern {
+        ID id PK
+        String name
+        ArchitecturePatternType type
+        Float successRate
+    }
+```
 
 ### Requirement
 
@@ -73,6 +152,33 @@ enum RequirementPriority {
   MEDIUM
   LOW
 }
+```
+
+#### Requirement Lifecycle Flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: Create
+    DRAFT --> REVIEW: Submit for Review
+    REVIEW --> APPROVED: Approve
+    REVIEW --> DRAFT: Request Changes
+    APPROVED --> IMPLEMENTED: Implement
+    IMPLEMENTED --> VALIDATED: Validate
+    VALIDATED --> [*]: Complete
+    
+    DRAFT --> DEPRECATED: Deprecate
+    REVIEW --> DEPRECATED: Deprecate
+    APPROVED --> DEPRECATED: Deprecate
+    
+    note right of REVIEW
+        Stakeholder review
+        Quality checks
+    end note
+    
+    note right of IMPLEMENTED
+        Development complete
+        Testing in progress
+    end note
 ```
 
 ### Architecture Decision
@@ -141,6 +247,37 @@ enum ArchitecturePatternType {
 }
 ```
 
+#### Architecture Pattern Comparison
+
+```mermaid
+graph LR
+    subgraph "Architecture Patterns"
+        MS[Microservices<br/>✓ Scalability<br/>✓ Independence<br/>✗ Complexity]
+        MN[Monolithic<br/>✓ Simplicity<br/>✓ Performance<br/>✗ Scalability]
+        SL[Serverless<br/>✓ Cost-effective<br/>✓ Auto-scaling<br/>✗ Vendor lock-in]
+        ED[Event-Driven<br/>✓ Decoupling<br/>✓ Real-time<br/>✗ Debugging]
+    end
+    
+    subgraph "Quality Attributes"
+        SC[Scalability]
+        PF[Performance]
+        MN_ATTR[Maintainability]
+        RL[Reliability]
+    end
+    
+    MS --> SC
+    MS --> MN_ATTR
+    MN --> PF
+    SL --> SC
+    ED --> SC
+    ED --> RL
+    
+    style MS fill:#e1f5fe
+    style MN fill:#fff3e0
+    style SL fill:#f3e5f5
+    style ED fill:#e8f5e9
+```
+
 ### Integration Types
 
 ```graphql
@@ -173,6 +310,40 @@ enum RequirementMappingType {
 ---
 
 ## Query Examples
+
+### Query Flow Visualization
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as GraphQL API
+    participant Auth as Auth Service
+    participant RL as Rate Limiter
+    participant REQ as Requirements DB
+    participant ARCH as Architecture DB
+    participant AI as AI Engine
+    
+    C->>API: POST /graphql (with JWT)
+    API->>Auth: Validate Token
+    Auth-->>API: Token Valid
+    API->>RL: Check Rate Limits
+    RL-->>API: Within Limits
+    
+    alt Requirements Query
+        API->>REQ: Fetch Requirements
+        REQ-->>API: Requirements Data
+    else Architecture Query
+        API->>ARCH: Fetch Architecture
+        ARCH-->>API: Architecture Data
+    else AI Recommendations
+        API->>AI: Generate Recommendations
+        AI->>REQ: Analyze Requirements
+        AI->>ARCH: Check Patterns
+        AI-->>API: Recommendations
+    end
+    
+    API-->>C: GraphQL Response
+```
 
 ### 1. Basic Requirement Query
 
@@ -582,6 +753,32 @@ query SearchArchitectureByRequirement(
 
 ## Mutation Examples
 
+### Mutation Operation Flow
+
+```mermaid
+flowchart TD
+    A[Client Request] --> B{Authenticate}
+    B -->|Invalid| ERR1[401 Unauthorized]
+    B -->|Valid| C{Validate Input}
+    C -->|Invalid| ERR2[400 Validation Error]
+    C -->|Valid| D{Check Permissions}
+    D -->|Denied| ERR3[403 Forbidden]
+    D -->|Allowed| E{Check State}
+    E -->|Conflict| ERR4[409 State Conflict]
+    E -->|Valid| F[Execute Mutation]
+    F --> G[Trigger Side Effects]
+    G --> H[Update Cache]
+    H --> I[Send Subscriptions]
+    I --> J[Return Response]
+    
+    style ERR1 fill:#ffcccc
+    style ERR2 fill:#ffcccc
+    style ERR3 fill:#ffcccc
+    style ERR4 fill:#ffcccc
+    style F fill:#ccffcc
+    style J fill:#ccffcc
+```
+
 ### 1. Create Requirement
 
 ```graphql
@@ -814,6 +1011,45 @@ mutation ValidateMapping($id: ID!, $validated: Boolean!, $validatorId: ID!, $not
 
 ## Subscription Examples
 
+### Real-time Event Flow
+
+```mermaid
+graph TB
+    subgraph "Event Sources"
+        REQ_EV[Requirement Events]
+        ARCH_EV[Architecture Events]
+        MAP_EV[Mapping Events]
+        AI_EV[AI Events]
+    end
+    
+    subgraph "WebSocket Server"
+        WS[WebSocket Handler]
+        SUB[Subscription Manager]
+        FILTER[Event Filter]
+    end
+    
+    subgraph "Connected Clients"
+        C1[Client 1<br/>Subscribed: Requirements]
+        C2[Client 2<br/>Subscribed: Architecture]
+        C3[Client 3<br/>Subscribed: All]
+    end
+    
+    REQ_EV --> WS
+    ARCH_EV --> WS
+    MAP_EV --> WS
+    AI_EV --> WS
+    
+    WS --> SUB
+    SUB --> FILTER
+    
+    FILTER -->|Requirements| C1
+    FILTER -->|Architecture| C2
+    FILTER -->|All Events| C3
+    
+    style WS fill:#f9f,stroke:#333,stroke-width:2px
+    style FILTER fill:#bbf,stroke:#333,stroke-width:2px
+```
+
 ### 1. Architecture Decision Updates
 
 ```graphql
@@ -959,6 +1195,45 @@ subscription IntegrationHealthUpdates {
 
 ## Best Practices
 
+### Performance Optimization Strategy
+
+```mermaid
+mindmap
+  root((Performance))
+    Query Optimization
+      Field Selection
+        Request only needed fields
+        Avoid deep nesting
+        Use fragments
+      Batching
+        Combine related queries
+        Use DataLoader pattern
+        Reduce round trips
+    Caching
+      Client-side
+        Apollo Cache
+        Query deduplication
+        Optimistic updates
+      Server-side
+        Redis caching
+        CDN integration
+        Response memoization
+    Pagination
+      Cursor-based
+        Efficient for large datasets
+        Stable pagination
+      Offset-based
+        Simple implementation
+        Good for small datasets
+    Rate Limiting
+      Query complexity
+        Depth limiting
+        Field counting
+      Time-based
+        Requests per hour
+        Sliding windows
+```
+
 ### 1. Query Optimization
 
 ```graphql
@@ -1082,6 +1357,45 @@ const { data, error, loading } = useQuery(GET_REQUIREMENT, {
 ---
 
 ## Rate Limiting
+
+### Rate Limit Tiers
+
+```mermaid
+graph LR
+    subgraph "Query Types"
+        SQ[Simple Queries<br/>1000/hour]
+        CQ[Complex Queries<br/>500/hour]
+        MUT[Mutations<br/>100/hour]
+        SUB[Subscriptions<br/>50 concurrent]
+    end
+    
+    subgraph "Complexity Factors"
+        DEPTH[Query Depth]
+        FIELDS[Field Count]
+        NESTED[Nested Relations]
+        BATCH[Batch Size]
+    end
+    
+    subgraph "Response Headers"
+        HL[X-RateLimit-Limit]
+        HR[X-RateLimit-Remaining]
+        HT[X-RateLimit-Reset]
+    end
+    
+    DEPTH --> CQ
+    FIELDS --> CQ
+    NESTED --> CQ
+    BATCH --> CQ
+    
+    SQ --> HL
+    CQ --> HL
+    MUT --> HL
+    
+    style SQ fill:#e8f5e9
+    style CQ fill:#fff3e0
+    style MUT fill:#ffe0b2
+    style SUB fill:#e1f5fe
+```
 
 GraphQL queries are rate-limited based on query complexity and depth:
 
