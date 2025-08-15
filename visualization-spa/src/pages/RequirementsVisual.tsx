@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as d3 from 'd3';
-import InteractiveGraph from '../../components/visualizations/InteractiveGraph';
-import HeatmapChart from '../../components/visualizations/HeatmapChart';
-import '../../styles/visualizations.css';
+import InteractiveGraph from '../components/visualizations/InteractiveGraph';
+import HeatmapChart from '../components/visualizations/HeatmapChart';
 
 interface Requirement {
   id: string;

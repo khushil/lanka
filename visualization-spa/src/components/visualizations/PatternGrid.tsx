@@ -58,8 +58,29 @@ import {
   Bookmark
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArchitecturePattern } from '../../graphql/architecture';
 import { VisualizationTheme } from '../../types/visualizations';
+
+// Mock type definition
+interface ArchitecturePattern {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  complexity: number;
+  usageCount: number;
+  successRate: number;
+  metrics: {
+    performance: number;
+    scalability: number;
+    maintainability: number;
+    security: number;
+  };
+  components: any[];
+  connections: any[];
+  benefits: string[];
+  tradeoffs: string[];
+  examples: any[];
+}
 
 interface PatternGridProps {
   patterns: ArchitecturePattern[];

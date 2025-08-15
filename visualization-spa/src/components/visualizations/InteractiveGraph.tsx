@@ -98,22 +98,6 @@ const InteractiveGraphComponent: React.FC<InteractiveGraphProps> = ({
   // D3 optimizations
   const d3Optimizations = useD3Optimization();
 
-  const colorSchemes = {
-    Security: '#ef4444',
-    Infrastructure: '#3b82f6',
-    Features: '#10b981',
-    Performance: '#f59e0b',
-    Integration: '#8b5cf6'
-  };
-
-  const priorityScale = d3.scaleOrdinal<string, number>()
-    .domain(['low', 'medium', 'high', 'critical'])
-    .range([8, 12, 16, 20]);
-
-  const statusScale = d3.scaleOrdinal<string, string>()
-    .domain(['draft', 'review', 'approved', 'implemented'])
-    .range(['#94a3b8', '#fbbf24', '#60a5fa', '#34d399']);
-
   // Memoized color schemes and scales for performance
   const colorSchemes = useMemo(() => ({
     Security: '#ef4444',
@@ -595,8 +579,6 @@ const InteractiveGraphComponent: React.FC<InteractiveGraphProps> = ({
       )}
     </div>
   );
-};
-
 };
 
 // Wrap with optimization wrapper

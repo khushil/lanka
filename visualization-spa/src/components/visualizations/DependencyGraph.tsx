@@ -102,7 +102,7 @@ const DependencyGraph: React.FC<DependencyGraphProps> = ({
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [showCircular, setShowCircular] = useState(true);
   const [showCritical, setShowCritical] = useState(true);
-  const [linkStrengthFilter, setLinkStrengthFilter] = useState([0, 1]);
+  const [linkStrengthFilterList, setLinkStrengthFilter] = useState([0, 1]);
   const [highlightNodes, setHighlightNodes] = useState(new Set());
   const [highlightLinks, setHighlightLinks] = useState(new Set());
 
@@ -162,7 +162,7 @@ const DependencyGraph: React.FC<DependencyGraphProps> = ({
         ...edge
       }))
     };
-  }, [data, searchTerm, filterType, filterStatus, linkStrengthFilter, showCircular, showCritical]);
+  }, [data, searchTerm, filterType, filterStatus, linkStrengthFilterList, showCircular, showCritical]);
 
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node);
@@ -702,4 +702,5 @@ const DependencyGraph: React.FC<DependencyGraphProps> = ({
   );
 };
 
+export default DependencyGraph;
 export { DependencyGraph };

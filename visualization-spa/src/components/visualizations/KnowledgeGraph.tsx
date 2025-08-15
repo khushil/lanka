@@ -38,7 +38,8 @@ import {
   BugReport,
   MoreVert,
   Visibility,
-  VisibilityOff
+  VisibilityOff,
+  Warning
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import ForceGraph3D from 'react-force-graph-3d';
@@ -946,4 +947,5 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   );
 };
 
+export default KnowledgeGraph;
 export { KnowledgeGraph };

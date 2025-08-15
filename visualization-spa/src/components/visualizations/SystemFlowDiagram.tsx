@@ -521,4 +521,5 @@ const SystemFlowDiagram: React.FC<SystemFlowDiagramProps> = ({
   );
 };
 
+export default SystemFlowDiagram;
 export { SystemFlowDiagram };

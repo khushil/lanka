@@ -55,8 +55,22 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArchitecturePattern } from '../../graphql/architecture';
 import { VisualizationTheme } from '../../types/visualizations';
+
+// Mock type definition
+interface ArchitecturePattern {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  components: any[];
+  connections: any[];
+  metrics?: {
+    performance: number;
+    scalability: number;
+    maintainability: number;
+  };
+}
 
 interface ArchitectureCanvasProps {
   patterns: ArchitecturePattern[];

@@ -49,8 +49,35 @@ import {
 } from '@mui/icons-material';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TechnologyStack, Technology } from '../../graphql/architecture';
 import { VisualizationTheme } from '../../types/visualizations';
+
+// Mock type definitions
+interface Technology {
+  name: string;
+  version: string;
+  type: string;
+  popularity: number;
+  learningCurve: number;
+  communitySupport: number;
+  maintenance: number;
+  license: string;
+}
+
+interface TechnologyStack {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  technologies: Technology[];
+  compatibility: number;
+  totalCost: any;
+  performance: any;
+  pros: string[];
+  cons: string[];
+  useCases: string[];
+  marketShare: number;
+  trend: string;
+}
 
 interface TechRadarProps {
   stacks: TechnologyStack[];

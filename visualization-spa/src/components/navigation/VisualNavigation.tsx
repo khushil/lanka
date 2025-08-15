@@ -621,4 +621,5 @@ const VisualNavigation: React.FC<VisualNavigationProps> = ({
   );
 };
 
+export default VisualNavigation;
 export { VisualNavigation };

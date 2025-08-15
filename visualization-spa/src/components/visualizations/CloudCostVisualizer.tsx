@@ -58,8 +58,24 @@ import {
   Radar
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CloudRecommendation } from '../../graphql/architecture';
 import { VisualizationTheme } from '../../types/visualizations';
+
+// Mock type definition
+interface CloudRecommendation {
+  provider: string;
+  services: any[];
+  totalCost: {
+    monthly: number;
+    yearly: number;
+    breakdown: any;
+  };
+  deployment: any;
+  optimization: {
+    suggestions: string[];
+    potentialSavings: number;
+    performanceImpact: string;
+  };
+}
 
 interface CloudCostVisualizerProps {
   recommendations: CloudRecommendation[];

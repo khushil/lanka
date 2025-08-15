@@ -651,4 +651,5 @@ const IntegrationHealth: React.FC<IntegrationHealthProps> = ({
   );
 };
 
+export default IntegrationHealth;
 export { IntegrationHealth };

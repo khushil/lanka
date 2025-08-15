@@ -33,13 +33,24 @@ import {
   Settings
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useArchitectureData } from '../../hooks/useArchitectureData';
-import ArchitectureCanvas from '../../components/visualizations/ArchitectureCanvas';
-import CloudCostVisualizer from '../../components/visualizations/CloudCostVisualizer';
-import DecisionFlowDiagram from '../../components/visualizations/DecisionFlowDiagram';
-import PatternGrid from '../../components/visualizations/PatternGrid';
-import TechRadar from '../../components/visualizations/TechRadar';
-import { VisualizationTheme } from '../../types/visualizations';
+import { useArchitectureData } from '../hooks/useArchitectureData';
+import ArchitectureCanvas from '../components/visualizations/ArchitectureCanvas';
+import CloudCostVisualizer from '../components/visualizations/CloudCostVisualizer';
+import DecisionFlowDiagram from '../components/visualizations/DecisionFlowDiagram';
+import PatternGrid from '../components/visualizations/PatternGrid';
+import TechRadar from '../components/visualizations/TechRadar';
+
+// Type definitions
+interface VisualizationTheme {
+  primary: string;
+  secondary: string;
+  accent: string;
+  background: string;
+  surface: string;
+  text: string;
+  textSecondary: string;
+  border: string;
+}
 
 interface TabPanelProps {
   children?: React.ReactNode;

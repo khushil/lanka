@@ -577,4 +577,5 @@ const DataFlowAnimation: React.FC<DataFlowAnimationProps> = ({
   );
 };
 
+export default DataFlowAnimation;
 export { DataFlowAnimation };

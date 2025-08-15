@@ -2,34 +2,46 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Editor from '@monaco-editor/react';
 import {
+  Box,
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+  Typography,
+  Button,
+  Chip,
+  LinearProgress,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Paper,
+  Divider,
+  Alert
+} from '@mui/material';
 import {
-  ArrowRight,
-  Code2,
-  FileText,
-  Sparkles,
+  ArrowForward,
+  Code,
+  Description,
+  AutoAwesome,
   Download,
-  Copy,
-  Play,
-  RotateCcw,
+  ContentCopy,
+  PlayArrow,
+  Refresh,
   Settings,
-  Zap,
+  FlashOn,
   CheckCircle,
-  AlertCircle,
-  Clock,
+  Error,
+  Schedule,
   TrendingUp,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
+  Visibility,
+  VisibilityOff,
+  AutoFixHigh,
+  Timer,
+  Warning,
+  FilePresent,
+  RestartAlt
+} from '@mui/icons-material';
 
 interface CodeGenerationWorkspaceProps {
   viewMode?: 'overview' | 'detailed';
@@ -79,7 +91,7 @@ const CodeGenerationWorkspace: React.FC<CodeGenerationWorkspaceProps> = ({
   const [showPreview, setShowPreview] = useState(false);
   const [splitView, setSplitView] = useState(true);
   
-  const requirementsRef = useRef<HTMLTextAreaElement>(null);
+  const requirementsRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<any>(null);
 
   const codeTemplates: CodeTemplate[] = [
@@ -252,8 +264,7 @@ const CodeGenerationWorkspace: React.FC<CodeGenerationWorkspaceProps> = ({
     switch (template.type) {
       case 'component':
         return `import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardContent, Typography, Button } from '@mui/material';
 
 interface ${requirements.replace(/\s+/g, '')}Props {
   data?: any[];
@@ -293,26 +304,23 @@ const ${requirements.replace(/\s+/g, '')}Component: React.FC<${requirements.repl
   if (loading) {
     return (
       <Card className={className}>
-        <CardContent className="p-6">
-          <div className="animate-pulse space-y-4">
-            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          </div>
+        <CardContent sx={{ p: 3 }}>
+          <Typography>Loading...</Typography>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className={\`w-full \${className}\`}>
+    <Card className={className} sx={{ width: '100%' }}>
       <CardHeader>
-        <CardTitle>${requirements || 'Generated Component'}</CardTitle>
+        <Typography variant="h6">${requirements || 'Generated Component'}</Typography>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {data.map((item, index) => (
-            <div key={index} className="p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-              <pre className="text-sm overflow-x-auto">
+            <div key={index} style={{ padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
+              <pre style={{ fontSize: 14, overflow: 'auto' }}>
                 {JSON.stringify(item, null, 2)}
               </pre>
             </div>
@@ -321,7 +329,8 @@ const ${requirements.replace(/\s+/g, '')}Component: React.FC<${requirements.repl
           <Button 
             onClick={handleAction}
             disabled={isProcessing || !localState}
-            className="w-full"
+            variant="contained"
+            fullWidth
           >
             {isProcessing ? 'Processing...' : 'Perform Action'}
           </Button>
@@ -459,215 +468,232 @@ export const ${requirements.toLowerCase().replace(/\s+/g, '')}Utility = (input: 
   const getStepIcon = (status: GenerationStep['status']) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle sx={{ fontSize: 16, color: 'success.main' }} />;
       case 'running':
-        return <Clock className="h-4 w-4 text-blue-500 animate-spin" />;
+        return <Timer sx={{ fontSize: 16, color: 'primary.main' }} />;
       case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <Error sx={{ fontSize: 16, color: 'error.main' }} />;
       default:
-        return <div className="h-4 w-4 rounded-full border-2 border-gray-300" />;
+        return <Box sx={{ width: 16, height: 16, borderRadius: '50%', border: 2, borderColor: 'grey.300' }} />;
     }
   };
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Generation Flow Visualization */}
       {isGenerating && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6"
         >
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-blue-500" />
-            AI Code Generation in Progress
-          </h3>
-          
-          <div className="space-y-4">
-            {generationSteps.map((step, index) => (
-              <motion.div
-                key={step.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="flex items-center gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg"
-              >
-                <div className="flex-shrink-0">
-                  {getStepIcon(step.status)}
-                </div>
-                
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium">{step.name}</span>
-                    {step.duration && (
-                      <span className="text-xs text-gray-500">
-                        {step.duration}ms
-                      </span>
-                    )}
-                  </div>
-                  
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    {step.description}
-                  </p>
-                  
-                  {step.status === 'running' && (
-                    <Progress value={step.progress} className="h-2" />
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </div>
+          <Paper sx={{ 
+            background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
+            p: 3,
+            borderRadius: 2
+          }}>
+            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AutoFixHigh sx={{ fontSize: 20, color: 'primary.main' }} />
+              AI Code Generation in Progress
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {generationSteps.map((step, index) => (
+                <motion.div
+                  key={step.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ flexShrink: 0 }}>
+                      {getStepIcon(step.status)}
+                    </Box>
+                    
+                    <Box sx={{ flex: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{step.name}</Typography>
+                        {step.duration && (
+                          <Typography variant="caption" color="text.secondary">
+                            {step.duration}ms
+                          </Typography>
+                        )}
+                      </Box>
+                      
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {step.description}
+                      </Typography>
+                      
+                      {step.status === 'running' && (
+                        <LinearProgress variant="determinate" value={step.progress} sx={{ height: 4, borderRadius: 2 }} />
+                      )}
+                    </Box>
+                  </Paper>
+                </motion.div>
+              ))}
+            </Box>
+          </Paper>
         </motion.div>
       )}
 
       {/* Main Workspace */}
-      <div className={`grid gap-6 ${splitView ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
+      <Box sx={{ 
+        display: 'grid', 
+        gap: 3, 
+        gridTemplateColumns: splitView ? { lg: '1fr 1fr' } : '1fr'
+      }}>
         {/* Requirements Panel */}
-        <Card className="h-fit">
+        <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FilePresent sx={{ fontSize: 20 }} />
                 Requirements & Configuration
-              </CardTitle>
+              </Typography>
               <Button
-                variant="outline"
-                size="sm"
+                variant="outlined"
+                size="small"
                 onClick={() => setSplitView(!splitView)}
               >
-                {splitView ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {splitView ? <VisibilityOff sx={{ fontSize: 16 }} /> : <Visibility sx={{ fontSize: 16 }} />}
               </Button>
-            </div>
+            </Box>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Template Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Code Template</label>
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a template..." />
-                </SelectTrigger>
-                <SelectContent>
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Template Selection */}
+              <FormControl fullWidth>
+                <InputLabel>Code Template</InputLabel>
+                <Select 
+                  value={selectedTemplate} 
+                  onChange={(e) => setSelectedTemplate(e.target.value)}
+                  label="Code Template"
+                >
                   {codeTemplates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{template.name}</span>
-                        <div className="flex items-center gap-2 ml-2">
-                          <Badge variant="outline" className="text-xs">
-                            {template.type}
-                          </Badge>
-                          <span className="text-xs text-gray-500">
+                    <MenuItem key={template.id} value={template.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <Typography>{template.name}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2 }}>
+                          <Chip 
+                            label={template.type} 
+                            variant="outlined" 
+                            size="small"
+                          />
+                          <Typography variant="caption" color="text.secondary">
                             ~{template.estimatedTime}s
-                          </span>
-                        </div>
-                      </div>
-                    </SelectItem>
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </MenuItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
+                </Select>
+              </FormControl>
 
-            {/* Language Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Programming Language</label>
-              <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+              {/* Language Selection */}
+              <FormControl fullWidth>
+                <InputLabel>Programming Language</InputLabel>
+                <Select 
+                  value={selectedLanguage} 
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  label="Programming Language"
+                >
                   {languages.map((lang) => (
-                    <SelectItem key={lang.value} value={lang.value}>
-                      <div className="flex items-center gap-2">
-                        <span>{lang.icon}</span>
-                        {lang.label}
-                      </div>
-                    </SelectItem>
+                    <MenuItem key={lang.value} value={lang.value}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography component="span">{lang.icon}</Typography>
+                        <Typography>{lang.label}</Typography>
+                      </Box>
+                    </MenuItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
+                </Select>
+              </FormControl>
 
-            {/* Requirements Input */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Describe Your Requirements</label>
-              <Textarea
-                ref={requirementsRef}
+              {/* Requirements Input */}
+              <TextField
+                inputRef={requirementsRef}
                 value={requirements}
                 onChange={(e) => setRequirements(e.target.value)}
-                placeholder="Describe what you want to build in natural language...\n\nExample: Create a user profile component that displays user information, allows editing, and has a save button with loading states."
-                rows={8}
-                className="resize-none"
-              />
-            </div>
+                label="Describe Your Requirements"
+                placeholder="Describe what you want to build in natural language...
 
-            {/* Generation Controls */}
-            <div className="flex gap-2">
-              <Button
-                onClick={handleGenerate}
-                disabled={!requirements.trim() || !selectedTemplate || isGenerating}
-                className="flex-1"
-              >
-                {isGenerating ? (
-                  <>
-                    <Clock className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="h-4 w-4 mr-2" />
-                    Generate Code
-                  </>
-                )}
-              </Button>
-              
-              {generatedCode && (
-                <Button variant="outline" onClick={() => {
-                  setGeneratedCode('');
-                  setGenerationMetrics(null);
-                  setGenerationSteps([]);
-                }}>
-                  <RotateCcw className="h-4 w-4" />
+Example: Create a user profile component that displays user information, allows editing, and has a save button with loading states."
+                multiline
+                rows={8}
+                fullWidth
+                variant="outlined"
+              />
+
+              {/* Generation Controls */}
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  onClick={handleGenerate}
+                  disabled={!requirements.trim() || !selectedTemplate || isGenerating}
+                  variant="contained"
+                  sx={{ flex: 1 }}
+                  startIcon={isGenerating ? <Timer /> : <AutoFixHigh />}
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Code'}
                 </Button>
-              )}
-            </div>
+                
+                {generatedCode && (
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => {
+                      setGeneratedCode('');
+                      setGenerationMetrics(null);
+                      setGenerationSteps([]);
+                    }}
+                  >
+                    <RestartAlt sx={{ fontSize: 16 }} />
+                  </Button>
+                )}
+              </Box>
+            </Box>
           </CardContent>
         </Card>
 
         {/* Code Output Panel */}
         {(splitView || generatedCode) && (
-          <Card className="h-fit">
+          <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Code2 className="h-5 w-5" />
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Code sx={{ fontSize: 20 }} />
                   Generated Code
-                </CardTitle>
+                </Typography>
                 
                 {generatedCode && (
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleCopyCode}>
-                      <Copy className="h-4 w-4 mr-2" />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Button 
+                      variant="outlined" 
+                      size="small" 
+                      onClick={handleCopyCode}
+                      startIcon={<ContentCopy sx={{ fontSize: 16 }} />}
+                    >
                       Copy
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleDownloadCode}>
-                      <Download className="h-4 w-4 mr-2" />
+                    <Button 
+                      variant="outlined" 
+                      size="small" 
+                      onClick={handleDownloadCode}
+                      startIcon={<Download sx={{ fontSize: 16 }} />}
+                    >
                       Download
                     </Button>
-                  </div>
+                  </Box>
                 )}
-              </div>
+              </Box>
             </CardHeader>
             <CardContent>
               {generatedCode ? (
-                <div className="space-y-4">
-                  <div className="border rounded-lg overflow-hidden">
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Paper sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
                     <Editor
                       height="400px"
                       language={selectedLanguage}
                       value={generatedCode}
                       onChange={(value) => setGeneratedCode(value || '')}
                       theme="vs-dark"
-                      options={{{
+                      options={{
                         minimap: { enabled: false },
                         scrollBeyondLastLine: false,
                         fontSize: 14,
@@ -677,93 +703,129 @@ export const ${requirements.toLowerCase().replace(/\s+/g, '')}Utility = (input: 
                         formatOnType: true
                       }}
                     />
-                  </div>
-                  
+                  </Paper>
+
                   {/* Quality Metrics */}
                   {generationMetrics && (
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
                     >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">Quality Score</span>
-                          <span className="font-semibold">{generationMetrics.qualityScore}/100</span>
-                        </div>
-                        <Progress value={generationMetrics.qualityScore} className="h-2" />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">Maintainability</span>
-                          <span className="font-semibold">{generationMetrics.maintainabilityIndex}/100</span>
-                        </div>
-                        <Progress value={generationMetrics.maintainabilityIndex} className="h-2" />
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Complexity</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold">{generationMetrics.cycloComplexity}</span>
-                          <Badge variant={generationMetrics.cycloComplexity <= 5 ? 'default' : 'destructive'}>
-                            {generationMetrics.cycloComplexity <= 5 ? 'Good' : 'High'}
-                          </Badge>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Test Coverage</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold">{generationMetrics.testCoverage}%</span>
-                          <TrendingUp className="h-4 w-4 text-green-500" />
-                        </div>
-                      </div>
+                      <Paper sx={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '1fr 1fr', 
+                        gap: 2, 
+                        p: 2, 
+                        backgroundColor: 'grey.50' 
+                      }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography variant="body2" color="text.secondary">Quality Score</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{generationMetrics.qualityScore}/100</Typography>
+                          </Box>
+                          <LinearProgress variant="determinate" value={generationMetrics.qualityScore} sx={{ height: 4 }} />
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography variant="body2" color="text.secondary">Maintainability</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{generationMetrics.maintainabilityIndex}/100</Typography>
+                          </Box>
+                          <LinearProgress variant="determinate" value={generationMetrics.maintainabilityIndex} sx={{ height: 4 }} />
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Typography variant="body2" color="text.secondary">Complexity</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{generationMetrics.cycloComplexity}</Typography>
+                            <Chip 
+                              label={generationMetrics.cycloComplexity <= 5 ? 'Good' : 'High'}
+                              color={generationMetrics.cycloComplexity <= 5 ? 'success' : 'error'}
+                              size="small"
+                            />
+                          </Box>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Typography variant="body2" color="text.secondary">Test Coverage</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{generationMetrics.testCoverage}%</Typography>
+                            <TrendingUp sx={{ fontSize: 16, color: 'success.main' }} />
+                          </Box>
+                        </Box>
+                      </Paper>
                     </motion.div>
                   )}
-                  
+
                   {/* Dependencies & Suggestions */}
                   {generationMetrics && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium mb-2">Dependencies</h4>
-                        <div className="flex flex-wrap gap-2">
+                    <Box sx={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, 
+                      gap: 2 
+                    }}>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Dependencies</Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                           {generationMetrics.dependencies.map((dep, index) => (
-                            <Badge key={index} variant="secondary">
-                              {dep}
-                            </Badge>
+                            <Chip 
+                              key={index} 
+                              label={dep}
+                              variant="outlined"
+                              size="small"
+                            />
                           ))}
-                        </div>
-                      </div>
+                        </Box>
+                      </Box>
                       
-                      <div>
-                        <h4 className="font-medium mb-2">Suggestions</h4>
-                        <div className="space-y-1">
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Suggestions</Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                           {generationMetrics.suggestions.slice(0, 3).map((suggestion, index) => (
-                            <div key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-                              {suggestion}
-                            </div>
+                            <Box key={index} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                              <Box sx={{ 
+                                width: 6, 
+                                height: 6, 
+                                backgroundColor: 'primary.main', 
+                                borderRadius: '50%', 
+                                mt: 1, 
+                                flexShrink: 0 
+                              }} />
+                              <Typography variant="body2" color="text.secondary">
+                                {suggestion}
+                              </Typography>
+                            </Box>
                           ))}
-                        </div>
-                      </div>
-                    </div>
+                        </Box>
+                      </Box>
+                    </Box>
                   )}
-                </div>
+                </Box>
               ) : (
-                <div className="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-                  <div className="text-center">
-                    <Code2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Generated code will appear here</p>
-                    <p className="text-sm mt-1">Describe your requirements and click Generate</p>
-                  </div>
-                </div>
+                <Paper sx={{ 
+                  height: 320, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  border: 2, 
+                  borderStyle: 'dashed', 
+                  borderColor: 'grey.300',
+                  backgroundColor: 'transparent'
+                }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Code sx={{ fontSize: 48, color: 'grey.400', mb: 2 }} />
+                    <Typography color="text.secondary">Generated code will appear here</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Describe your requirements and click Generate
+                    </Typography>
+                  </Box>
+                </Paper>
               )}
             </CardContent>
           </Card>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };
 

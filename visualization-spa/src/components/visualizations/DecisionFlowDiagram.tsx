@@ -58,8 +58,24 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArchitectureDecision, DecisionStatus, Priority } from '../../graphql/architecture';
 import { VisualizationTheme } from '../../types/visualizations';
+
+// Mock type definitions
+type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED';
+type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+interface ArchitectureDecision {
+  id: string;
+  title: string;
+  status: DecisionStatus;
+  priority: Priority;
+  context: string;
+  decision: string;
+  consequences: string;
+  alternatives: any[];
+  stakeholders: any[];
+  createdAt: string;
+}
 
 interface DecisionFlowDiagramProps {
   decisions: ArchitectureDecision[];
@@ -72,21 +88,20 @@ interface DecisionFlowDiagramProps {
 const DecisionNode = ({ data }: { data: any }) => {
   const getStatusColor = (status: DecisionStatus) => {
     switch (status) {
-      case DecisionStatus.APPROVED: return '#4caf50';
-      case DecisionStatus.UNDER_REVIEW: return '#ff9800';
-      case DecisionStatus.PROPOSED: return '#2196f3';
-      case DecisionStatus.REJECTED: return '#f44336';
-      case DecisionStatus.SUPERSEDED: return '#9e9e9e';
+      case 'APPROVED': return '#4caf50';
+      case 'PROPOSED': return '#2196f3';
+      case 'REJECTED': return '#f44336';
+      case 'SUPERSEDED': return '#9e9e9e';
       default: return '#757575';
     }
   };
 
   const getPriorityIcon = (priority: Priority) => {
     switch (priority) {
-      case Priority.CRITICAL: return <Warning color="error" />;
-      case Priority.HIGH: return <TrendingUp color="warning" />;
-      case Priority.MEDIUM: return <Info color="info" />;
-      case Priority.LOW: return <RadioButtonUnchecked color="action" />;
+      case 'CRITICAL': return <Warning color="error" />;
+      case 'HIGH': return <TrendingUp color="warning" />;
+      case 'MEDIUM': return <Info color="info" />;
+      case 'LOW': return <RadioButtonUnchecked color="action" />;
       default: return <Info />;
     }
   };
@@ -333,15 +348,13 @@ const DecisionFlowDiagram: React.FC<DecisionFlowDiagramProps> = ({
 
   const getStatusIcon = (status: DecisionStatus) => {
     switch (status) {
-      case DecisionStatus.APPROVED:
+      case 'APPROVED':
         return <CheckCircle color="success" />;
-      case DecisionStatus.UNDER_REVIEW:
-        return <AccessTime color="warning" />;
-      case DecisionStatus.PROPOSED:
+      case 'PROPOSED':
         return <Assignment color="info" />;
-      case DecisionStatus.REJECTED:
+      case 'REJECTED':
         return <RadioButtonUnchecked color="error" />;
-      case DecisionStatus.SUPERSEDED:
+      case 'SUPERSEDED':
         return <RadioButtonUnchecked color="disabled" />;
       default:
         return <RadioButtonUnchecked />;

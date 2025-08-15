@@ -1,14 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useQuery, useMutation } from '@apollo/client';
-import {
-  GET_PRODUCTION_METRICS,
-  GET_CODE_QUALITY_TRENDS,
-  GET_ANALYSIS_HISTORY,
-  GENERATE_CODE,
-  RUN_TESTS,
-  ANALYZE_CODE
-} from '@/graphql/development';
-import { developmentHelpers } from '@/utils';
+// Mock GraphQL client hooks
+const useQuery = (query: any, options?: any) => {
+  return {
+    data: null,
+    loading: false,
+    refetch: async () => {},
+    error: null
+  };
+};
+
+const useMutation = (mutation: any) => {
+  return [async () => ({}), { loading: false }];
+};
+
+// Mock GraphQL queries
+const GET_PRODUCTION_METRICS = 'GET_PRODUCTION_METRICS';
+const GET_CODE_QUALITY_TRENDS = 'GET_CODE_QUALITY_TRENDS';
+const GET_ANALYSIS_HISTORY = 'GET_ANALYSIS_HISTORY';
+const GENERATE_CODE = 'GENERATE_CODE';
+const RUN_TESTS = 'RUN_TESTS';
+const ANALYZE_CODE = 'ANALYZE_CODE';
 
 export interface DevelopmentMetrics {
   codeGeneration: {

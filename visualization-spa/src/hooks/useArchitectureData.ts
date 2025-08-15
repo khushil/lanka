@@ -1,15 +1,170 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useLazyQuery } from '@apollo/client';
-import {
-  GET_ARCHITECTURE_PATTERNS,
-  GET_TECHNOLOGY_STACKS,
-  GET_CLOUD_RECOMMENDATIONS,
-  GET_ARCHITECTURE_DECISIONS,
-  ArchitecturePattern,
-  TechnologyStack,
-  CloudRecommendation,
-  ArchitectureDecision
-} from '../graphql/architecture';
+// Mock GraphQL client hooks
+const useQuery = (query: any, options?: any) => {
+  return {
+    data: null,
+    loading: false,
+    error: null,
+    refetch: async () => {}
+  };
+};
+
+const useLazyQuery = (query: any, options?: any) => {
+  return [async () => {}, { data: null, loading: false, error: null }];
+};
+
+// Mock GraphQL queries
+const GET_ARCHITECTURE_PATTERNS = 'GET_ARCHITECTURE_PATTERNS';
+const GET_TECHNOLOGY_STACKS = 'GET_TECHNOLOGY_STACKS';
+const GET_CLOUD_RECOMMENDATIONS = 'GET_CLOUD_RECOMMENDATIONS';
+const GET_ARCHITECTURE_DECISIONS = 'GET_ARCHITECTURE_DECISIONS';
+
+// Type definitions
+interface ArchitecturePattern {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tags?: string[];
+  complexity: number;
+  usageCount?: number;
+  successRate?: number;
+  metrics: {
+    performance: number;
+    scalability: number;
+    maintainability: number;
+    security: number;
+  };
+  components: any[];
+  connections: any[];
+  benefits: string[];
+  tradeoffs: string[];
+  examples: Array<{
+    company: string;
+    useCase: string;
+    outcome: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TechnologyStack {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  technologies: Array<{
+    name: string;
+    version: string;
+    type: string;
+    popularity: number;
+    learningCurve: number;
+    communitySupport: number;
+    maintenance: number;
+    license: string;
+  }>;
+  compatibility: number;
+  totalCost: {
+    development: number;
+    hosting: number;
+    maintenance: number;
+    licensing: number;
+  };
+  performance: {
+    throughput: number;
+    latency: number;
+    scalability: number;
+    reliability: number;
+  };
+  pros: string[];
+  cons: string[];
+  useCases: string[];
+  companies: string[];
+  marketShare: number;
+  trend: string;
+  recommendation: {
+    score: number;
+    reasoning: string;
+  };
+}
+
+interface CloudRecommendation {
+  provider: string;
+  services: Array<{
+    component: string;
+    service: string;
+    tier: string;
+    configuration: any;
+    cost: {
+      monthly: number;
+      yearly: number;
+      payAsYouGo: number;
+    };
+    performance: {
+      cpu: string;
+      memory: string;
+      storage: string;
+      bandwidth: string;
+    };
+    alternatives: any[];
+  }>;
+  totalCost: {
+    monthly: number;
+    yearly: number;
+    breakdown: {
+      compute: number;
+      storage: number;
+      network: number;
+      services: number;
+    };
+  };
+  deployment: {
+    regions: string[];
+    availabilityZones: string[];
+    networking: any;
+    security: any;
+  };
+  optimization: {
+    suggestions: string[];
+    potentialSavings: number;
+    performanceImpact: string;
+  };
+}
+
+interface ArchitectureDecision {
+  id: string;
+  title: string;
+  status: 'DRAFT' | 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED';
+  context: string;
+  decision: string;
+  consequences: string;
+  alternatives: Array<{
+    option: string;
+    pros: string[];
+    cons: string[];
+    impact: string;
+  }>;
+  stakeholders: Array<{
+    name: string;
+    role: string;
+    approval: boolean;
+    comments?: string;
+  }>;
+  tags: string[];
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  impact: {
+    technical: number;
+    business: number;
+    timeline: number;
+    cost: number;
+  };
+  createdBy: {
+    id: string;
+    name: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface UseArchitectureDataOptions {
   autoRefresh?: boolean;

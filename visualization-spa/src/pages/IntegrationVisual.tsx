@@ -33,14 +33,34 @@ import {
   VisibilityOff
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SystemFlowDiagram } from '../../components/visualizations/SystemFlowDiagram';
-import { DataFlowAnimation } from '../../components/visualizations/DataFlowAnimation';
-import { DependencyGraph } from '../../components/visualizations/DependencyGraph';
-import { IntegrationHealth } from '../../components/visualizations/IntegrationHealth';
-import { KnowledgeGraph } from '../../components/visualizations/KnowledgeGraph';
-import { VisualNavigation } from '../../components/navigation/VisualNavigation';
-import { useVisualizationData } from '../../hooks/useVisualizationData';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import SystemFlowDiagram from '../components/visualizations/SystemFlowDiagram';
+import DataFlowAnimation from '../components/visualizations/DataFlowAnimation';
+import DependencyGraph from '../components/visualizations/DependencyGraph';
+import IntegrationHealth from '../components/visualizations/IntegrationHealth';
+import KnowledgeGraph from '../components/visualizations/KnowledgeGraph';
+import VisualNavigation from '../components/navigation/VisualNavigation';
+import { useVisualizationData } from '../hooks/useVisualizationData';
+
+// Mock WebSocket hook
+const useWebSocket = (endpoint: string) => {
+  const [isConnected, setIsConnected] = React.useState(false);
+  const [lastMessage, setLastMessage] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    // Simulate connection
+    const timer = setTimeout(() => setIsConnected(true), 1000);
+    const messageTimer = setInterval(() => {
+      setLastMessage({ timestamp: Date.now(), data: 'mock update' });
+    }, 5000);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(messageTimer);
+    };
+  }, []);
+
+  return { isConnected, lastMessage };
+};
 
 interface TabPanelProps {
   children?: React.ReactNode;

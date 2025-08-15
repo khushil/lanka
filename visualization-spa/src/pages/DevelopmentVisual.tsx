@@ -1,46 +1,60 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  Box,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
+  Typography,
   Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+  Tab,
+  Button,
+  Chip,
+  Switch,
+  FormControlLabel,
+  Alert,
+  CircularProgress,
+  Container,
+  Grid,
+  Paper
+} from '@mui/material';
 import {
-  Code2,
-  TestTube2,
-  Workflow,
-  HeatMap,
-  Activity,
-  Eye,
+  Code,
+  Science,
+  Timeline,
+  BarChart,
+  ShowChart,
+  Visibility,
   Settings,
   Download,
-  RefreshCw,
-  Zap,
+  Refresh,
+  FlashOn,
   TrendingUp,
-  AlertTriangle,
+  Warning,
   CheckCircle,
-  Clock,
-} from 'lucide-react';
+  Schedule
+} from '@mui/icons-material';
 
 // Import visualization components
-import CodeGenerationWorkspace from '@/components/visualizations/CodeGenerationWorkspace';
-import TestCoverageMap from '@/components/visualizations/TestCoverageMap';
-import DevOpsPipeline from '@/components/visualizations/DevOpsPipeline';
-import CodeQualityHeatmap from '@/components/visualizations/CodeQualityHeatmap';
-import ProductionInsights from '@/components/visualizations/ProductionInsights';
+import CodeGenerationWorkspace from '../components/visualizations/CodeGenerationWorkspace';
+import TestCoverageMap from '../components/visualizations/TestCoverageMap';
+import DevOpsPipeline from '../components/visualizations/DevOpsPipeline';
+import CodeQualityHeatmap from '../components/visualizations/CodeQualityHeatmap';
+import ProductionInsights from '../components/visualizations/ProductionInsights';
 
 // Import hooks and utilities
-import { useDevelopmentData } from '@/hooks/useDevelopmentData';
-import { formatters } from '@/utils';
+import { useDevelopmentData } from '../hooks/useDevelopmentData';
+
+// Utility functions for formatting
+const formatters = {
+  formatDuration: (milliseconds: number) => {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
+  }
+};
 
 interface DevelopmentMetrics {
   codeGeneration: {
@@ -80,15 +94,40 @@ interface VisualizationTab {
   name: string;
   icon: React.ReactNode;
   description: string;
-  component: React.ComponentType;
+  component: React.ComponentType<any>;
   metrics?: {
     primary: { label: string; value: string | number; trend?: 'up' | 'down' | 'stable' };
     secondary?: { label: string; value: string | number }[];
   };
 }
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`development-tabpanel-${index}`}
+      aria-labelledby={`development-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
 const DevelopmentVisual: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('workspace');
+  const [activeTab, setActiveTab] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -104,7 +143,7 @@ const DevelopmentVisual: React.FC = () => {
     {
       id: 'workspace',
       name: 'Code Workspace',
-      icon: <Code2 className="h-5 w-5" />,
+      icon: <Code sx={{ fontSize: 20 }} />,
       description: 'AI-powered code generation with requirements analysis',
       component: CodeGenerationWorkspace,
       metrics: {
@@ -122,7 +161,7 @@ const DevelopmentVisual: React.FC = () => {
     {
       id: 'coverage',
       name: 'Test Coverage',
-      icon: <TestTube2 className="h-5 w-5" />,
+      icon: <Science sx={{ fontSize: 20 }} />,
       description: 'Interactive test coverage analysis and visualization',
       component: TestCoverageMap,
       metrics: {
@@ -140,7 +179,7 @@ const DevelopmentVisual: React.FC = () => {
     {
       id: 'pipeline',
       name: 'DevOps Pipeline',
-      icon: <Workflow className="h-5 w-5" />,
+      icon: <Timeline sx={{ fontSize: 20 }} />,
       description: 'Animated CI/CD pipeline visualization with real-time status',
       component: DevOpsPipeline,
       metrics: {
@@ -158,7 +197,7 @@ const DevelopmentVisual: React.FC = () => {
     {
       id: 'quality',
       name: 'Code Quality',
-      icon: <HeatMap className="h-5 w-5" />,
+      icon: <BarChart sx={{ fontSize: 20 }} />,
       description: 'Code quality heatmap with technical debt analysis',
       component: CodeQualityHeatmap,
       metrics: {
@@ -176,7 +215,7 @@ const DevelopmentVisual: React.FC = () => {
     {
       id: 'production',
       name: 'Production Insights',
-      icon: <Activity className="h-5 w-5" />,
+      icon: <ShowChart sx={{ fontSize: 20 }} />,
       description: 'Real-time production metrics and performance dashboard',
       component: ProductionInsights,
       metrics: {
@@ -203,7 +242,7 @@ const DevelopmentVisual: React.FC = () => {
     const exportData = {
       metrics: developmentMetrics,
       timestamp: new Date().toISOString(),
-      activeTab,
+      activeTab: visualizationTabs[activeTab]?.id,
       viewMode
     };
     
@@ -218,158 +257,203 @@ const DevelopmentVisual: React.FC = () => {
     URL.revokeObjectURL(url);
   }, [developmentMetrics, activeTab, viewMode]);
 
-  const getStatusIcon = (trend: 'up' | 'down' | 'stable') => {
+  const getStatusIcon = (trend?: 'up' | 'down' | 'stable') => {
     switch (trend) {
       case 'up':
-        return <TrendingUp className="h-4 w-4 text-green-500" />;
+        return <TrendingUp sx={{ fontSize: 16, color: 'success.main' }} />;
       case 'down':
-        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+        return <Warning sx={{ fontSize: 16, color: 'warning.main' }} />;
       default:
-        return <CheckCircle className="h-4 w-4 text-blue-500" />;
+        return <CheckCircle sx={{ fontSize: 16, color: 'primary.main' }} />;
     }
   };
 
-  const activeTabConfig = visualizationTabs.find(tab => tab.id === activeTab);
-  const ActiveComponent = activeTabConfig?.component;
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+  };
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 dark:from-gray-900 dark:to-red-900/20 flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Failed to Load Development Data</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">{error}</p>
-            <Button onClick={handleRefresh} disabled={isRefreshing}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+      <Box sx={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #ffebee 0%, #fce4ec 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <Card sx={{ maxWidth: 400, width: '100%' }}>
+          <CardContent sx={{ p: 3, textAlign: 'center' }}>
+            <Warning sx={{ fontSize: 48, color: 'error.main', mb: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              Failed to Load Development Data
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              {error}
+            </Typography>
+            <Button 
+              onClick={handleRefresh} 
+              disabled={isRefreshing}
+              variant="contained"
+              startIcon={<Refresh sx={{ transform: isRefreshing ? 'rotate(180deg)' : 'none' }} />}
+            >
               Try Again
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+    <Box sx={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+      py: 4
+    }}>
+      <Container maxWidth="xl">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
         >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl">
-                <Zap className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          {/* Header */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ 
+                p: 1.5, 
+                background: 'linear-gradient(135deg, #1976d2, #9c27b0)',
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <FlashOn sx={{ fontSize: 32, color: 'white' }} />
+              </Box>
+              <Box>
+                <Typography variant="h4" component="h1" sx={{ 
+                  fontWeight: 'bold',
+                  background: 'linear-gradient(135deg, #1976d2, #9c27b0)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  mb: 0.5
+                }}>
                   Development Intelligence
-                </h1>
-                <p className="text-gray-600 dark:text-gray-300 mt-1">
+                </Typography>
+                <Typography variant="subtitle1" color="text.secondary">
                   Comprehensive visual analytics for modern software development
-                </p>
-              </div>
-            </div>
+                </Typography>
+              </Box>
+            </Box>
             
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Button
-                  variant={viewMode === 'overview' ? 'default' : 'outline'}
-                  size="sm"
+                  variant={viewMode === 'overview' ? 'contained' : 'outlined'}
+                  size="small"
                   onClick={() => setViewMode('overview')}
+                  startIcon={<Visibility />}
                 >
-                  <Eye className="h-4 w-4 mr-2" />
                   Overview
                 </Button>
                 <Button
-                  variant={viewMode === 'detailed' ? 'default' : 'outline'}
-                  size="sm"
+                  variant={viewMode === 'detailed' ? 'contained' : 'outlined'}
+                  size="small"
                   onClick={() => setViewMode('detailed')}
+                  startIcon={<Settings />}
                 >
-                  <Settings className="h-4 w-4 mr-2" />
                   Detailed
                 </Button>
-              </div>
+              </Box>
               
               <Button
-                variant="outline"
-                size="sm"
+                variant="outlined"
+                size="small"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
+                startIcon={<Refresh sx={{ transform: isRefreshing ? 'rotate(180deg)' : 'none' }} />}
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
               
               <Button
-                variant="outline"
-                size="sm"
+                variant="outlined"
+                size="small"
                 onClick={handleExportData}
+                startIcon={<Download />}
               >
-                <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
-            </div>
-          </div>
+            </Box>
+          </Box>
 
           {/* Quick Metrics Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <Grid container spacing={3} sx={{ mb: 4 }}>
             {visualizationTabs.map((tab, index) => (
-              <motion.div
-                key={tab.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card 
-                  className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
-                    activeTab === tab.id 
-                      ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                      : 'hover:border-blue-300'
-                  }`}
-                  onClick={() => setActiveTab(tab.id)}
+              <Grid item xs={12} sm={6} lg={2.4} key={tab.id}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className={`p-2 rounded-lg ${
-                        activeTab === tab.id 
-                          ? 'bg-blue-500 text-white' 
-                          : 'bg-gray-100 dark:bg-gray-800'
-                      }`}>
-                        {tab.icon}
-                      </div>
-                      {tab.metrics?.primary.trend && getStatusIcon(tab.metrics.primary.trend)}
-                    </div>
-                    
-                    <h3 className="font-semibold text-sm mb-1">{tab.name}</h3>
-                    
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        {tab.metrics?.primary.value}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {tab.metrics?.primary.label}
-                      </span>
-                    </div>
-                    
-                    {tab.metrics?.secondary && (
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        {tab.metrics.secondary.map((metric, idx) => (
-                          <div key={idx} className="text-gray-600 dark:text-gray-400">
-                            <span className="font-medium">{metric.value}</span>
-                            <div className="text-[10px]">{metric.label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
+                  <Card 
+                    sx={{
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: 4
+                      },
+                      border: activeTab === index ? 2 : 0,
+                      borderColor: 'primary.main',
+                      backgroundColor: activeTab === index ? 'primary.50' : 'background.paper'
+                    }}
+                    onClick={() => setActiveTab(index)}
+                  >
+                    <CardContent sx={{ p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{
+                          p: 1,
+                          borderRadius: 1,
+                          backgroundColor: activeTab === index ? 'primary.main' : 'grey.100',
+                          color: activeTab === index ? 'white' : 'text.secondary'
+                        }}>
+                          {tab.icon}
+                        </Box>
+                        {tab.metrics?.primary.trend && getStatusIcon(tab.metrics.primary.trend)}
+                      </Box>
+                      
+                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                        {tab.name}
+                      </Typography>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                        <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                          {tab.metrics?.primary.value}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {tab.metrics?.primary.label}
+                        </Typography>
+                      </Box>
+                      
+                      {tab.metrics?.secondary && (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                          {tab.metrics.secondary.map((metric, idx) => (
+                            <Box key={idx} sx={{ textAlign: 'center' }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
+                                {metric.value}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                {metric.label}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Grid>
             ))}
-          </div>
+          </Grid>
         </motion.div>
 
         {/* Main Visualization Content */}
@@ -378,100 +462,122 @@ const DevelopmentVisual: React.FC = () => {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
         >
-          <Card className="shadow-2xl border-0 bg-white/70 dark:bg-gray-900/70 backdrop-blur-sm">
-            <CardContent className="p-0">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="w-full justify-start border-b rounded-none bg-transparent p-0 h-auto">
-                  {visualizationTabs.map((tab) => (
-                    <TabsTrigger
-                      key={tab.id}
-                      value={tab.id}
-                      className="flex items-center gap-3 px-6 py-4 border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent rounded-none"
-                    >
-                      {tab.icon}
-                      <div className="text-left">
-                        <div className="font-medium">{tab.name}</div>
-                        <div className="text-xs text-gray-500 hidden lg:block">
-                          {tab.description}
-                        </div>
-                      </div>
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+          <Paper sx={{ 
+            boxShadow: 4,
+            borderRadius: 2,
+            overflow: 'hidden',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <Tabs
+              value={activeTab}
+              onChange={handleTabChange}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                borderBottom: 1,
+                borderColor: 'divider',
+                '& .MuiTab-root': {
+                  minHeight: 72,
+                  textTransform: 'none',
+                  fontSize: '1rem'
+                }
+              }}
+            >
+              {visualizationTabs.map((tab, index) => (
+                <Tab
+                  key={index}
+                  icon={tab.icon}
+                  label={tab.name}
+                  iconPosition="start"
+                  sx={{ gap: 1 }}
+                />
+              ))}
+            </Tabs>
 
-                <AnimatePresence mode="wait">
-                  {visualizationTabs.map((tab) => (
-                    <TabsContent key={tab.id} value={tab.id} className="p-6 mt-0">
-                      <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <div className="mb-6">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                                {tab.icon}
-                              </div>
-                              <div>
-                                <h2 className="text-2xl font-bold">{tab.name}</h2>
-                                <p className="text-gray-600 dark:text-gray-300">
-                                  {tab.description}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            {isLoading && (
-                              <div className="flex items-center gap-2 text-sm text-gray-500">
-                                <Clock className="h-4 w-4 animate-spin" />
-                                Loading data...
-                              </div>
-                            )}
-                          </div>
-                          
-                          {tab.metrics && (
-                            <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-600 dark:text-gray-400">
-                                  {tab.metrics.primary.label}:
-                                </span>
-                                <span className="font-semibold text-lg">
-                                  {tab.metrics.primary.value}
-                                </span>
-                                {tab.metrics.primary.trend && getStatusIcon(tab.metrics.primary.trend)}
-                              </div>
-                              
-                              {tab.metrics.secondary && (
-                                <div className="flex items-center gap-4">
-                                  {tab.metrics.secondary.map((metric, idx) => (
-                                    <Badge key={idx} variant="secondary" className="gap-1">
-                                      <span className="text-xs">{metric.label}:</span>
-                                      <span className="font-medium">{metric.value}</span>
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+            {/* Tab Panels */}
+            <AnimatePresence mode="wait">
+              {visualizationTabs.map((tab, index) => (
+                <TabPanel key={index} value={activeTab} index={index}>
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Box sx={{ mb: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Box sx={{ p: 1, backgroundColor: 'primary.50', borderRadius: 1 }}>
+                            {tab.icon}
+                          </Box>
+                          <Box>
+                            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                              {tab.name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {tab.description}
+                            </Typography>
+                          </Box>
+                        </Box>
                         
-                        {ActiveComponent && (
-                          <div className="min-h-[600px]">
-                            <ActiveComponent 
-                              viewMode={viewMode}
-                              isLoading={isLoading}
-                              autoRefresh={autoRefresh}
-                            />
-                          </div>
+                        {isLoading && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CircularProgress size={20} />
+                            <Typography variant="body2" color="text.secondary">
+                              Loading data...
+                            </Typography>
+                          </Box>
                         )}
-                      </motion.div>
-                    </TabsContent>
-                  ))}
-                </AnimatePresence>
-              </Tabs>
-            </CardContent>
-          </Card>
+                      </Box>
+                      
+                      {tab.metrics && (
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 3, 
+                          p: 2, 
+                          backgroundColor: 'grey.50',
+                          borderRadius: 1
+                        }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {tab.metrics.primary.label}:
+                            </Typography>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                              {tab.metrics.primary.value}
+                            </Typography>
+                            {tab.metrics.primary.trend && getStatusIcon(tab.metrics.primary.trend)}
+                          </Box>
+                          
+                          {tab.metrics.secondary && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                              {tab.metrics.secondary.map((metric, idx) => (
+                                <Chip 
+                                  key={idx} 
+                                  label={`${metric.label}: ${metric.value}`}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                    </Box>
+                    
+                    <Box sx={{ minHeight: 600, position: 'relative' }}>
+                      <tab.component 
+                        viewMode={viewMode}
+                        isLoading={isLoading}
+                        autoRefresh={autoRefresh}
+                      />
+                    </Box>
+                  </motion.div>
+                </TabPanel>
+              ))}
+            </AnimatePresence>
+          </Paper>
         </motion.div>
 
         {/* Footer */}
@@ -479,14 +585,15 @@ const DevelopmentVisual: React.FC = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mt-8 text-center"
         >
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            LANKA Development Intelligence • Real-time insights powered by AI
-          </p>
+          <Box sx={{ mt: 4, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">
+              LANKA Development Intelligence • Real-time insights powered by AI
+            </Typography>
+          </Box>
         </motion.div>
-      </div>
-    </div>
+      </Container>
+    </Box>
   );
 };
 
