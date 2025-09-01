@@ -1,0 +1,334 @@
+# Production Docker Compose Configuration for Lanka Platform
+# Optimized for performance, security, and monitoring
+
+version: '3.8'
+
+services:
+  # Lanka Platform Application - Optimized Production Build
+  lanka-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.optimized
+      target: production
+      args:
+        - NODE_ENV=production
+    image: lanka-platform:production-optimized
+    container_name: lanka-production
+    restart: unless-stopped
+    
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    
+    # Security hardening
+    user: "1001:1001"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined
+    
+    # Environment configuration
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD_FILE=/run/secrets/neo4j_password
+      - REDIS_URI=redis://redis:6379
+      - LOG_LEVEL=info
+      - METRICS_ENABLED=true
+      - PROMETHEUS_PORT=9090
+      
+    # Secrets management
+    secrets:
+      - neo4j_password
+      - jwt_secret
+      - api_encryption_key
+      
+    # Networking
+    ports:
+      - "4000:4000"
+      - "9090:9090"  # Metrics port
+    networks:
+      - lanka-network
+      
+    # Health checks
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      
+    # Volumes (minimal for production)
+    volumes:
+      - lanka-logs:/var/log/lanka:rw
+      - /tmp  # Writable tmp for read-only containers
+    
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Neo4j Database - Production Configuration
+  neo4j:
+    image: neo4j:5-community
+    container_name: lanka-neo4j
+    restart: unless-stopped
+    
+    # Resource allocation
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 2G
+          cpus: '1'
+    
+    # Environment configuration
+    environment:
+      - NEO4J_AUTH=neo4j/production_password_from_secret
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
+      - NEO4J_dbms_default__listen__address=0.0.0.0
+      - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:7687
+      - NEO4J_dbms_connector_http_listen__address=0.0.0.0:7474
+      - NEO4J_dbms_logs_debug_level=WARN
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
+      
+    # Security
+    user: "7474:7474"
+    
+    # Ports (internal network only)
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    networks:
+      - lanka-network
+      
+    # Persistent storage
+    volumes:
+      - neo4j-data:/data:rw
+      - neo4j-logs:/logs:rw
+      - neo4j-import:/import:ro
+      - neo4j-plugins:/plugins:ro
+      
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p production_password_from_secret 'RETURN 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Redis Cache - Production Configuration  
+  redis:
+    image: redis:7-alpine
+    container_name: lanka-redis
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    
+    # Redis configuration
+    command: >
+      redis-server
+      --save 60 1000
+      --loglevel warning
+      --maxmemory 768mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+      
+    # Security
+    user: "999:999"
+    
+    # Networking
+    ports:
+      - "6379:6379"
+    networks:
+      - lanka-network
+      
+    # Persistent storage
+    volumes:
+      - redis-data:/data:rw
+      
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: lanka-prometheus
+    restart: unless-stopped
+    
+    # Configuration
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.external-url=http://localhost:9091'
+      
+    # Ports
+    ports:
+      - "9091:9090"
+    networks:
+      - lanka-network
+      
+    # Configuration and data
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus:rw
+      
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: lanka-grafana
+    restart: unless-stopped
+    
+    # Environment
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=secure_admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_LOG_LEVEL=warn
+      
+    # Ports
+    ports:
+      - "3001:3000"
+    networks:
+      - lanka-network
+      
+    # Configuration and data
+    volumes:
+      - grafana-data:/var/lib/grafana:rw
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    depends_on:
+      - prometheus
+
+  # Log Aggregation (Optional)
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: lanka-loki
+    restart: unless-stopped
+    
+    # Configuration
+    command: -config.file=/etc/loki/local-config.yaml
+    
+    # Ports (internal only)
+    networks:
+      - lanka-network
+      
+    # Storage
+    volumes:
+      - loki-data:/loki:rw
+
+# Networks
+networks:
+  lanka-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: lanka-bridge
+
+# Persistent Volumes
+volumes:
+  # Application volumes
+  lanka-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
+      
+  # Database volumes
+  neo4j-data:
+    driver: local
+    name: lanka-neo4j-data
+  neo4j-logs:
+    driver: local
+    name: lanka-neo4j-logs
+  neo4j-import:
+    driver: local
+    name: lanka-neo4j-import
+  neo4j-plugins:
+    driver: local
+    name: lanka-neo4j-plugins
+    
+  # Cache volumes
+  redis-data:
+    driver: local
+    name: lanka-redis-data
+    
+  # Monitoring volumes
+  prometheus-data:
+    driver: local
+    name: lanka-prometheus-data
+  grafana-data:
+    driver: local
+    name: lanka-grafana-data
+  loki-data:
+    driver: local
+    name: lanka-loki-data
+
+# Secrets (use Docker Swarm secrets in production)
+secrets:
+  neo4j_password:
+    file: ./secrets/neo4j_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  api_encryption_key:
+    file: ./secrets/api_encryption_key.txt

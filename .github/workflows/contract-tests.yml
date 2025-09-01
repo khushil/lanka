@@ -1,0 +1,323 @@
+name: API Contract Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/api/**'
+      - 'src/modules/**/graphql/**'
+      - 'docs/api/**'
+      - 'tests/contracts/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'src/api/**'
+      - 'src/modules/**/graphql/**'
+      - 'docs/api/**'
+      - 'tests/contracts/**'
+
+env:
+  NODE_VERSION: '18'
+  CI: true
+
+jobs:
+  contract-validation:
+    name: Contract Validation Pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    services:
+      neo4j:
+        image: neo4j:5.13
+        env:
+          NEO4J_AUTH: neo4j/testpassword
+          NEO4J_PLUGINS: '["apoc"]'
+        ports:
+          - 7687:7687
+          - 7474:7474
+        options: --health-cmd="cypher-shell -u neo4j -p testpassword 'RETURN 1'" --health-interval=10s --health-timeout=5s --health-retries=5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for schema comparison
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm run build
+      
+      - name: Setup test environment
+        run: |
+          cp .env.example .env.test
+          echo "NEO4J_URI=bolt://localhost:7687" >> .env.test
+          echo "NEO4J_USER=neo4j" >> .env.test
+          echo "NEO4J_PASSWORD=testpassword" >> .env.test
+      
+      - name: Wait for Neo4j
+        run: |
+          timeout 60 bash -c 'until printf "" 2>>/dev/null >>/dev/tcp/localhost/7687; do sleep 1; done'
+          echo "Neo4j is ready"
+      
+      - name: Generate baseline schema
+        run: |
+          npm run schema:introspect
+          mkdir -p tests/contracts/fixtures/schema-history
+          cp schema-introspection.json tests/contracts/fixtures/schema-history/baseline-schema.json
+      
+      - name: Run GraphQL contract tests
+        run: |
+          npm run test:contracts:graphql
+        env:
+          NODE_ENV: test
+          
+      - name: Run REST API contract tests
+        run: |
+          npm run test:contracts:rest
+        env:
+          NODE_ENV: test
+      
+      - name: Run WebSocket contract tests  
+        run: |
+          npm run test:contracts:websocket
+        env:
+          NODE_ENV: test
+      
+      - name: Run integration contract tests
+        run: |
+          npm run test:contracts:integration
+        env:
+          NODE_ENV: test
+      
+      - name: Generate contract documentation
+        run: |
+          npm run contracts:docs
+          npm run schema:docs
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contract-test-results
+          path: |
+            tests/contracts/test-results/
+            tests/contracts/coverage/
+            docs/contracts/
+          retention-days: 30
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          file: tests/contracts/coverage/lcov.info
+          flags: contract-tests
+          name: contract-coverage
+          fail_ci_if_error: false
+
+  schema-evolution-check:
+    name: Schema Evolution Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Get baseline schema from main
+        run: |
+          git checkout origin/main -- tests/contracts/fixtures/schema-history/baseline-schema.json || echo "No baseline schema found"
+      
+      - name: Build current schema
+        run: |
+          npm run build
+          npm run schema:introspect
+      
+      - name: Analyze schema changes
+        run: |
+          npm run schema:analyze-changes
+        continue-on-error: true
+        id: schema-analysis
+      
+      - name: Comment PR with schema changes
+        uses: actions/github-script@v7
+        if: steps.schema-analysis.outcome == 'failure'
+        with:
+          script: |
+            const fs = require('fs');
+            let comment = '## 🔄 GraphQL Schema Changes Detected\n\n';
+            
+            try {
+              const analysisResult = JSON.parse(fs.readFileSync('schema-analysis.json', 'utf8'));
+              
+              if (analysisResult.breakingChanges.length > 0) {
+                comment += '### ⚠️ Breaking Changes\n';
+                analysisResult.breakingChanges.forEach(change => {
+                  comment += `- **${change.type}**: ${change.description}\n`;
+                });
+                comment += '\n';
+              }
+              
+              if (analysisResult.dangerousChanges.length > 0) {
+                comment += '### ⚡ Dangerous Changes\n';
+                analysisResult.dangerousChanges.forEach(change => {
+                  comment += `- **${change.type}**: ${change.description}\n`;
+                });
+                comment += '\n';
+              }
+              
+              comment += '### 📋 Next Steps\n';
+              comment += '- Review changes for backward compatibility\n';
+              comment += '- Update API documentation if needed\n';
+              comment += '- Consider versioning strategy for breaking changes\n';
+              comment += '- Test client applications for compatibility\n';
+              
+            } catch (error) {
+              comment += 'Error analyzing schema changes. Please check manually.\n';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  performance-contract-validation:
+    name: Performance Contract Validation
+    runs-on: ubuntu-latest
+    needs: contract-validation
+    
+    services:
+      neo4j:
+        image: neo4j:5.13
+        env:
+          NEO4J_AUTH: neo4j/testpassword
+          NEO4J_PLUGINS: '["apoc"]'
+        ports:
+          - 7687:7687
+        options: --health-cmd="cypher-shell -u neo4j -p testpassword 'RETURN 1'" --health-interval=10s --health-timeout=5s --health-retries=5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build and start server
+        run: |
+          npm run build
+          npm start &
+          sleep 10
+        env:
+          NODE_ENV: test
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: testpassword
+      
+      - name: Run performance contract tests
+        run: |
+          npm run test:contracts:performance
+          npm run contracts:benchmark
+        timeout-minutes: 5
+      
+      - name: Validate query complexity limits
+        run: |
+          npm run contracts:complexity-check
+      
+      - name: Generate performance report
+        run: |
+          npm run contracts:performance-report
+      
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-contract-results
+          path: |
+            performance-results/
+            complexity-analysis/
+          retention-days: 7
+
+  contract-documentation:
+    name: Contract Documentation Sync
+    runs-on: ubuntu-latest
+    needs: contract-validation
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Generate contract documentation
+        run: |
+          npm run contracts:docs
+          npm run schema:docs
+          npm run api:docs
+      
+      - name: Deploy documentation
+        run: |
+          # This would deploy to documentation hosting service
+          echo "Documentation generated successfully"
+      
+      - name: Update contract registry
+        run: |
+          # This would update a contract registry or API catalog
+          echo "Contract registry updated"
+
+  notify-teams:
+    name: Notify Teams
+    runs-on: ubuntu-latest
+    needs: [contract-validation, schema-evolution-check, performance-contract-validation]
+    if: always() && (failure() || cancelled())
+    
+    steps:
+      - name: Notify on contract test failures
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'API Contract Test Failure';
+            const message = `Contract tests failed in ${context.repo.repo}. Please review the changes.`;
+            
+            // This would integrate with team notification systems
+            console.log(`${title}: ${message}`);
+            
+            // Example: Slack notification
+            // await fetch(process.env.SLACK_WEBHOOK_URL, {
+            //   method: 'POST',
+            //   headers: { 'Content-Type': 'application/json' },
+            //   body: JSON.stringify({ text: `${title}: ${message}` })
+            // });

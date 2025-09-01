@@ -1,0 +1,280 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lanka-platform-config
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: config
+data:
+  # Application Configuration
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  PORT: "4000"
+  
+  # Database Configuration
+  NEO4J_HOST: "neo4j.lanka-platform.svc.cluster.local"
+  NEO4J_PORT: "7687"
+  NEO4J_DATABASE: "neo4j"
+  
+  # Redis Configuration  
+  REDIS_HOST: "redis.lanka-platform.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  
+  # Memory Configuration
+  MEMORY_MONITORING_ENABLED: "true"
+  MEMORY_THRESHOLD_WARNING: "80"
+  MEMORY_THRESHOLD_CRITICAL: "90"
+  MEMORY_GC_ENABLED: "true"
+  
+  # Performance Configuration
+  CACHE_TTL: "3600"
+  CONNECTION_POOL_SIZE: "10"
+  REQUEST_TIMEOUT: "30000"
+  
+  # Monitoring Configuration
+  METRICS_ENABLED: "true"
+  HEALTH_CHECK_INTERVAL: "30"
+  
+  # Logging Configuration
+  LOG_FORMAT: "json"
+  LOG_RETENTION_DAYS: "7"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lanka-platform-nginx-config
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: nginx-config
+data:
+  nginx.conf: |
+    upstream backend {
+        least_conn;
+        server lanka-api-service:4000 max_fails=3 fail_timeout=30s;
+        keepalive 32;
+    }
+    
+    server {
+        listen 80;
+        server_name _;
+        
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Main application
+        location / {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Connection settings
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+            
+            # Buffer settings
+            proxy_buffering on;
+            proxy_buffer_size 4k;
+            proxy_buffers 8 4k;
+            proxy_busy_buffers_size 8k;
+            
+            # Keep alive
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+        }
+        
+        # WebSocket support
+        location /socket.io/ {
+            proxy_pass http://backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            proxy_connect_timeout 7d;
+            proxy_send_timeout 7d;
+            proxy_read_timeout 7d;
+        }
+        
+        # Static files caching
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            add_header X-Content-Type-Options nosniff;
+        }
+        
+        # Security headers
+        add_header X-Frame-Options DENY;
+        add_header X-XSS-Protection "1; mode=block";
+        add_header X-Content-Type-Options nosniff;
+        add_header Referrer-Policy strict-origin-when-cross-origin;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()";
+        
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_proxied any;
+        gzip_comp_level 6;
+        gzip_types
+            text/plain
+            text/css
+            text/xml
+            text/javascript
+            application/json
+            application/javascript
+            application/xml+rss
+            application/atom+xml
+            image/svg+xml;
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+    
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager:9093
+    
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      # Kubernetes API server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+      
+      # Kubernetes nodes
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics
+      
+      # Lanka Platform services
+      - job_name: 'lanka-platform'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - lanka-platform
+                - lanka-staging
+                - lanka-development
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_service_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_service_name]
+            action: replace
+            target_label: kubernetes_name
+  
+  rules.yml: |
+    groups:
+      - name: lanka-platform
+        rules:
+          # High CPU usage
+          - alert: HighCPUUsage
+            expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+            for: 5m
+            labels:
+              severity: warning
+              service: lanka-platform
+            annotations:
+              summary: "High CPU usage on {{ $labels.instance }}"
+              description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+          
+          # High memory usage
+          - alert: HighMemoryUsage
+            expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              service: lanka-platform
+            annotations:
+              summary: "High memory usage on {{ $labels.instance }}"
+              description: "Memory usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+          
+          # Service down
+          - alert: ServiceDown
+            expr: up{job="lanka-platform"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              service: lanka-platform
+            annotations:
+              summary: "Lanka Platform service is down"
+              description: "Lanka Platform service {{ $labels.instance }} is down for more than 1 minute"
+          
+          # High response time
+          - alert: HighResponseTime
+            expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="lanka-platform"}[5m])) by (le)) > 2
+            for: 5m
+            labels:
+              severity: warning
+              service: lanka-platform
+            annotations:
+              summary: "High response time for Lanka Platform"
+              description: "95th percentile response time is above 2 seconds for more than 5 minutes"

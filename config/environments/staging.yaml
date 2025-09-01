@@ -1,0 +1,155 @@
+# Staging Environment Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lanka-staging-config
+  namespace: staging
+data:
+  NODE_ENV: "staging"
+  LOG_LEVEL: "debug"
+  ENABLE_DEBUG: "true"
+  
+  # Database Configuration
+  DB_HOST: "lanka-postgres-staging.default.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "lanka_staging"
+  DB_SSL: "true"
+  DB_POOL_MIN: "2"
+  DB_POOL_MAX: "10"
+  
+  # Redis Configuration
+  REDIS_HOST: "lanka-redis-staging.default.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_TTL: "3600"
+  
+  # API Configuration
+  API_BASE_URL: "https://staging.lanka.com"
+  API_RATE_LIMIT: "1000"
+  API_TIMEOUT: "30000"
+  
+  # Feature Flags
+  ENABLE_FEATURE_FLAGS: "true"
+  FEATURE_ADVANCED_ANALYTICS: "true"
+  FEATURE_BETA_UI: "true"
+  FEATURE_DEBUG_MODE: "true"
+  
+  # Monitoring
+  METRICS_ENABLED: "true"
+  TRACING_ENABLED: "true"
+  LOGGING_STRUCTURED: "true"
+  
+  # Security
+  CORS_ORIGINS: "https://staging.lanka.com,https://admin-staging.lanka.com"
+  JWT_EXPIRY: "24h"
+  
+  # Storage
+  STORAGE_TYPE: "s3"
+  S3_BUCKET: "lanka-staging-assets"
+  S3_REGION: "us-east-1"
+  
+  # Email
+  EMAIL_PROVIDER: "sendgrid-staging"
+  EMAIL_FROM: "noreply-staging@lanka.com"
+  
+  # External Services
+  PAYMENT_GATEWAY: "stripe-test"
+  SMS_PROVIDER: "twilio-test"
+  
+  # Performance
+  CACHE_TTL: "300"
+  COMPRESSION_ENABLED: "true"
+  
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lanka-staging-secrets
+  namespace: staging
+type: Opaque
+data:
+  # Database credentials (base64 encoded)
+  DB_USERNAME: c3RhZ2luZ191c2Vy  # staging_user
+  DB_PASSWORD: c3RhZ2luZ19wYXNz  # staging_pass
+  
+  # Redis credentials
+  REDIS_PASSWORD: cmVkaXNfc3RhZ2luZw==  # redis_staging
+  
+  # JWT Secret
+  JWT_SECRET: c3RhZ2luZ19qd3Rfc2VjcmV0X2tleQ==  # staging_jwt_secret_key
+  
+  # Database URL
+  DATABASE_URL: cG9zdGdyZXNxbDovL3N0YWdpbmdfdXNlcjpzdGFnaW5nX3Bhc3NAbGFua2EtcG9zdGdyZXMtc3RhZ2luZy5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsOjU0MzIvbGFua2Ffc3RhZ2luZw==
+  
+  # External service keys
+  STRIPE_SECRET_KEY: c2tfdGVzdF8xMjM0NTY3ODkw  # sk_test_1234567890
+  SENDGRID_API_KEY: U0cuVGVzdEFQSUtleTEyMzQ1Njc4OTA=  # SG.TestAPIKey1234567890
+  TWILIO_AUTH_TOKEN: dHdpbGlvX3Rlc3RfdG9rZW4=  # twilio_test_token
+  
+  # AWS credentials
+  AWS_ACCESS_KEY_ID: QVNIQU1QTEVfQUNDRVNTX0tFWQ==  # ASHAMPLË_ACCESS_KEY
+  AWS_SECRET_ACCESS_KEY: YXdzX3NlY3JldF9hY2Nlc3Nfa2V5XzEyMzQ1Njc4OTA=  # aws_secret_access_key_1234567890
+  
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lanka-staging-nginx
+  namespace: staging
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name staging.lanka.com;
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        
+        # Enable compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+        
+        # Rate limiting
+        limit_req_zone $binary_remote_addr zone=api:10m rate=100r/m;
+        
+        location / {
+            proxy_pass http://lanka-api-service:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+            
+            # Staging specific headers
+            add_header X-Environment "staging" always;
+            add_header X-Version "$VERSION" always;
+        }
+        
+        location /api/ {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass http://lanka-api-service:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        location /health {
+            proxy_pass http://lanka-api-service:3000/health;
+            access_log off;
+        }
+        
+        location /metrics {
+            proxy_pass http://lanka-api-service:3000/metrics;
+            allow 10.0.0.0/8;
+            deny all;
+        }
+    }

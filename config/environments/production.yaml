@@ -1,0 +1,291 @@
+# Production Environment Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lanka-production-config
+  namespace: production
+data:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  ENABLE_DEBUG: "false"
+  
+  # Database Configuration
+  DB_HOST: "lanka-postgres-production.default.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "lanka_production"
+  DB_SSL: "require"
+  DB_POOL_MIN: "5"
+  DB_POOL_MAX: "50"
+  DB_STATEMENT_TIMEOUT: "30000"
+  DB_QUERY_TIMEOUT: "10000"
+  
+  # Redis Configuration
+  REDIS_HOST: "lanka-redis-production.default.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_TTL: "7200"
+  REDIS_CLUSTER_ENABLED: "true"
+  
+  # API Configuration
+  API_BASE_URL: "https://lanka.com"
+  API_RATE_LIMIT: "500"
+  API_TIMEOUT: "15000"
+  API_MAX_REQUEST_SIZE: "10mb"
+  
+  # Feature Flags
+  ENABLE_FEATURE_FLAGS: "true"
+  FEATURE_ADVANCED_ANALYTICS: "true"
+  FEATURE_BETA_UI: "false"
+  FEATURE_DEBUG_MODE: "false"
+  
+  # Monitoring
+  METRICS_ENABLED: "true"
+  TRACING_ENABLED: "true"
+  LOGGING_STRUCTURED: "true"
+  SENTRY_ENABLED: "true"
+  
+  # Security
+  CORS_ORIGINS: "https://lanka.com,https://admin.lanka.com"
+  JWT_EXPIRY: "1h"
+  JWT_REFRESH_EXPIRY: "7d"
+  BCRYPT_ROUNDS: "12"
+  
+  # Storage
+  STORAGE_TYPE: "s3"
+  S3_BUCKET: "lanka-production-assets"
+  S3_REGION: "us-east-1"
+  CDN_ENABLED: "true"
+  CDN_DOMAIN: "cdn.lanka.com"
+  
+  # Email
+  EMAIL_PROVIDER: "sendgrid"
+  EMAIL_FROM: "noreply@lanka.com"
+  EMAIL_REPLY_TO: "support@lanka.com"
+  
+  # External Services
+  PAYMENT_GATEWAY: "stripe-live"
+  SMS_PROVIDER: "twilio"
+  
+  # Performance
+  CACHE_TTL: "3600"
+  COMPRESSION_ENABLED: "true"
+  HTTP2_ENABLED: "true"
+  
+  # Scaling
+  AUTO_SCALING_ENABLED: "true"
+  MIN_REPLICAS: "3"
+  MAX_REPLICAS: "50"
+  TARGET_CPU_UTILIZATION: "70"
+  TARGET_MEMORY_UTILIZATION: "80"
+  
+  # Backup
+  BACKUP_ENABLED: "true"
+  BACKUP_SCHEDULE: "0 2 * * *"  # Daily at 2 AM
+  BACKUP_RETENTION_DAYS: "30"
+  
+  # SSL/TLS
+  TLS_VERSION: "1.2"
+  HSTS_ENABLED: "true"
+  HSTS_MAX_AGE: "31536000"
+  
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lanka-production-secrets
+  namespace: production
+type: Opaque
+data:
+  # Database credentials (base64 encoded placeholders)
+  DB_USERNAME: cHJvZF91c2Vy  # prod_user
+  DB_PASSWORD: cHJvZF9wYXNzX3NlY3VyZQ==  # prod_pass_secure
+  
+  # Redis credentials
+  REDIS_PASSWORD: cmVkaXNfcHJvZF9zZWN1cmU=  # redis_prod_secure
+  
+  # JWT Secret (must be changed in production)
+  JWT_SECRET: cHJvZF9qd3Rfc2VjcmV0X3NlY3VyZV9rZXk=  # prod_jwt_secret_secure_key
+  JWT_REFRESH_SECRET: cHJvZF9yZWZyZXNoX3NlY3JldA==  # prod_refresh_secret
+  
+  # Database URL
+  DATABASE_URL: cG9zdGdyZXNxbDovL3Byb2RfdXNlcjpwcm9kX3Bhc3Nfc2VjdXJlQGxhbmthLXBvc3RncmVzLXByb2R1Y3Rpb24uZGVmYXVsdC5zdmMuY2x1c3Rlci5sb2NhbDo1NDMyL2xhbmthX3Byb2R1Y3Rpb24=
+  
+  # External service keys (placeholders - must be updated with real keys)
+  STRIPE_SECRET_KEY: c2tfbGl2ZV9QTEFDRUhPTERFUg==  # sk_live_PLACEHOLDER
+  STRIPE_WEBHOOK_SECRET: d2hfc2VjX1BMQUNFSE9MREVSM0Q=  # whsec_PLACEHOLDER
+  
+  SENDGRID_API_KEY: U0cuUExBQ0VIT0xERVJfQVBJX0tFWQ==  # SG.PLACEHOLDER_API_KEY
+  
+  TWILIO_AUTH_TOKEN: dHdpbGlvX2xpdmVfdG9rZW4=  # twilio_live_token
+  TWILIO_ACCOUNT_SID: QUMxMjM0NTY3ODkwYWJjZGVm  # AC1234567890abcdef
+  
+  # AWS credentials
+  AWS_ACCESS_KEY_ID: QVNJQU1QTEVfUFJPRF9BQ0NFU1NfS0VZ  # ACIAMPLE_PROD_ACCESS_KEY
+  AWS_SECRET_ACCESS_KEY: YXdzX3Byb2Rfc2VjcmV0X2FjY2Vzc19rZXk=  # aws_prod_secret_access_key
+  
+  # Monitoring
+  SENTRY_DSN: aHR0cHM6Ly9QTEFDRUhPTERFUkBzZW50cnkuaW8vUFJPSkVDVA==  # https://PLACEHOLDER@sentry.io/PROJECT
+  
+  # Encryption
+  ENCRYPTION_KEY: ZW5jcnlwdGlvbl9rZXlfMzJfY2hhcnNfbG9uZw==  # encryption_key_32_chars_long
+  
+  # Session
+  SESSION_SECRET: c2Vzc2lvbl9zZWNyZXRfMzJfY2hhcnNfbG9uZw==  # session_secret_32_chars_long
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lanka-production-nginx
+  namespace: production
+data:
+  nginx.conf: |
+    # Production-optimized Nginx configuration
+    
+    # Rate limiting zones
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/s;
+    limit_req_zone $binary_remote_addr zone=upload:10m rate=1r/s;
+    
+    # Connection limiting
+    limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+    
+    server {
+        listen 80;
+        server_name lanka.com www.lanka.com;
+        return 301 https://$server_name$request_uri;
+    }
+    
+    server {
+        listen 443 ssl http2;
+        server_name lanka.com www.lanka.com;
+        
+        # SSL configuration
+        ssl_certificate /etc/ssl/certs/lanka.com.crt;
+        ssl_certificate_key /etc/ssl/private/lanka.com.key;
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:MozTLS:10m;
+        ssl_session_tickets off;
+        
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+        ssl_prefer_server_ciphers off;
+        
+        # HSTS
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        
+        # Security headers
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" always;
+        
+        # Connection limits
+        limit_conn conn_limit_per_ip 20;
+        
+        # Enable compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_comp_level 6;
+        gzip_types
+            text/plain
+            text/css
+            text/xml
+            text/javascript
+            application/javascript
+            application/xml+rss
+            application/json
+            application/xml
+            image/svg+xml;
+        
+        # Static file caching
+        location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff2?|ttf|otf)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            add_header X-Content-Type-Options "nosniff";
+        }
+        
+        # Health check endpoint (no rate limiting)
+        location = /health {
+            proxy_pass http://lanka-api-service:3000/health;
+            access_log off;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        # Metrics endpoint (restricted access)
+        location = /metrics {
+            proxy_pass http://lanka-api-service:3000/metrics;
+            allow 10.0.0.0/8;
+            allow 172.16.0.0/12;
+            allow 192.168.0.0/16;
+            deny all;
+            access_log off;
+        }
+        
+        # Authentication endpoints (stricter rate limiting)
+        location ~ ^/(api/)?(auth|login|register|forgot-password) {
+            limit_req zone=auth burst=10 nodelay;
+            proxy_pass http://lanka-api-service:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        # File upload endpoints (very strict rate limiting)
+        location ~ ^/(api/)?upload {
+            limit_req zone=upload burst=3 nodelay;
+            client_max_body_size 50m;
+            proxy_pass http://lanka-api-service:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 300s;
+        }
+        
+        # API endpoints (moderate rate limiting)
+        location /api/ {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass http://lanka-api-service:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 5s;
+            proxy_read_timeout 30s;
+            proxy_send_timeout 30s;
+        }
+        
+        # Frontend application
+        location / {
+            proxy_pass http://lanka-api-service:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+            
+            # Production headers
+            add_header X-Environment "production" always;
+            add_header X-Version "$VERSION" always;
+        }
+        
+        # Error pages
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
+        
+        # Logging
+        access_log /var/log/nginx/lanka.access.log combined buffer=16k flush=5s;
+        error_log /var/log/nginx/lanka.error.log warn;
+    }

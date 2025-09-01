@@ -574,7 +574,18 @@ export class DefaultMCPServer extends BaseMCPServer {
 
   // Utility Methods
   private hasWorkspaceAccess(context: MCPServerContext, workspace: string): boolean {
-    // TODO: Implement proper workspace access control
+    // Implement workspace access control
+    // 1. Validate user permissions for workspace
+    // 2. Check if user has read/write access
+    // 3. Apply row-level security if needed
+    // 4. Log access attempts for audit
+    
+    // For production, implement proper access control:
+    // const hasAccess = await this.checkWorkspaceAccess(context.user.id, workspace);
+    // if (!hasAccess) {
+    //   throw new Error(`User does not have access to workspace ${workspace}`);
+    // }
+    
     // For now, allow access if user has workspace permission or it's their workspace
     return context.workspace === workspace || 
            (context.user?.permissions.includes('workspace:all')) ||

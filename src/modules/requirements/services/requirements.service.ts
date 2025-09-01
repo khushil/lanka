@@ -4,6 +4,7 @@ import { logger } from '../../../core/logging/logger';
 import { Requirement, RequirementType, RequirementStatus } from '../types/requirement.types';
 import { NLPService } from './nlp.service';
 import { SimilarityService } from './similarity.service';
+import { SecureQueryBuilder } from '../../../utils/secure-query-builder';
 
 export class RequirementsService {
   private nlpService: NLPService;
@@ -82,19 +83,26 @@ export class RequirementsService {
   }
 
   async findSimilarRequirements(requirementId: string): Promise<any[]> {
+    // Use parameterized query to prevent injection
     const query = `
       MATCH (r:Requirement {id: $requirementId})
       MATCH (other:Requirement)
-      WHERE other.id <> r.id
+      WHERE other.id <> r.id AND other.embedding IS NOT NULL AND r.embedding IS NOT NULL
       WITH r, other, 
            gds.similarity.cosine(r.embedding, other.embedding) AS similarity
-      WHERE similarity > 0.7
+      WHERE similarity > $threshold
       RETURN other, similarity
       ORDER BY similarity DESC
-      LIMIT 10
+      LIMIT $limit
     `;
 
-    const results = await this.neo4j.executeQuery(query, { requirementId });
+    const params = {
+      requirementId: SecureQueryBuilder.validateAndSanitizeInput(requirementId),
+      threshold: 0.7,
+      limit: 10
+    };
+
+    const results = await this.neo4j.executeQuery(query, params);
     return results;
   }
 

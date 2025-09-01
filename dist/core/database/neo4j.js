@@ -6,21 +6,33 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Neo4jService = void 0;
 const neo4j_driver_1 = __importDefault(require("neo4j-driver"));
 const logger_1 = require("../logging/logger");
+const environment_1 = require("../config/environment");
 class Neo4jService {
     driver;
     static instance;
+    sessionPool = new Map();
+    poolCleanupInterval = null;
+    maxPoolSize = 10;
+    sessionTTL = 30000; // 30 seconds
+    isShuttingDown = false;
     constructor() {
-        const uri = process.env.NEO4J_URI || 'bolt://localhost:7687';
-        const user = process.env.NEO4J_USER || 'neo4j';
-        const password = process.env.NEO4J_PASSWORD || 'lanka2025';
+        // Use validated environment configuration
+        const config = (0, environment_1.loadEnvironmentConfig)();
+        const { uri, user, password } = config.neo4j;
         this.driver = neo4j_driver_1.default.driver(uri, neo4j_driver_1.default.auth.basic(user, password), {
-            maxConnectionPoolSize: 50,
-            connectionAcquisitionTimeout: 60000,
+            maxConnectionPoolSize: 20,
+            connectionAcquisitionTimeout: 30000,
+            maxConnectionLifetime: 30 * 60 * 1000, // 30 minutes
+            connectionTimeout: 20000,
+            disableLosslessIntegers: true,
+            useBigInt: false,
             logging: {
                 level: 'info',
                 logger: (level, message) => logger_1.logger.log(level, message),
             },
         });
+        // Start session pool cleanup
+        this.startPoolCleanup();
         this.verifyConnectivity();
     }
     static getInstance() {
@@ -40,36 +52,99 @@ class Neo4jService {
         }
     }
     getSession(database) {
+        if (this.isShuttingDown) {
+            throw new Error('Neo4j service is shutting down');
+        }
+        const key = `${database || 'default'}_${neo4j_driver_1.default.session.WRITE}`;
+        const poolEntry = this.sessionPool.get(key);
+        // Reuse existing session if available and not expired
+        if (poolEntry && Date.now() - poolEntry.lastUsed < this.sessionTTL) {
+            poolEntry.lastUsed = Date.now();
+            return poolEntry.session;
+        }
+        // Clean up expired session
+        if (poolEntry) {
+            this.cleanupSession(key, poolEntry.session);
+        }
+        // Create new session if pool has space
+        if (this.sessionPool.size < this.maxPoolSize) {
+            const session = this.driver.session({
+                database: database || neo4j_driver_1.default.session.WRITE,
+                defaultAccessMode: neo4j_driver_1.default.session.WRITE,
+            });
+            this.sessionPool.set(key, {
+                session,
+                lastUsed: Date.now()
+            });
+            return session;
+        }
+        // Pool is full, return a new session without pooling
         return this.driver.session({
             database: database || neo4j_driver_1.default.session.WRITE,
             defaultAccessMode: neo4j_driver_1.default.session.WRITE,
         });
     }
-    async executeQuery(query, params = {}, database) {
-        const session = this.getSession(database);
+    async executeQuery(query, params = {}, database, usePool = false) {
+        let session;
+        let shouldClose = true;
+        if (usePool) {
+            session = this.getSession(database);
+            shouldClose = false; // Pool manages session lifecycle
+        }
+        else {
+            session = this.driver.session({
+                database: database || neo4j_driver_1.default.session.WRITE,
+                defaultAccessMode: neo4j_driver_1.default.session.WRITE,
+            });
+        }
         try {
-            const result = await session.run(query, params);
-            return result.records.map(record => record.toObject());
+            // Add query timeout
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Query timeout')), 30000);
+            });
+            const queryPromise = session.run(query, params);
+            const result = await Promise.race([queryPromise, timeoutPromise]);
+            return result.records.map((record) => record.toObject());
         }
         catch (error) {
             logger_1.logger.error('Query execution failed', { query, params, error });
             throw error;
         }
         finally {
-            await session.close();
+            if (shouldClose) {
+                await this.safeCloseSession(session);
+            }
         }
     }
-    async executeTransaction(work, database) {
-        const session = this.getSession(database);
+    async executeTransaction(work, database, usePool = false) {
+        let session;
+        let shouldClose = true;
+        if (usePool) {
+            session = this.getSession(database);
+            shouldClose = false;
+        }
+        else {
+            session = this.driver.session({
+                database: database || neo4j_driver_1.default.session.WRITE,
+                defaultAccessMode: neo4j_driver_1.default.session.WRITE,
+            });
+        }
         try {
-            return await session.executeWrite(work);
+            // Add transaction timeout
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Transaction timeout')), 60000);
+            });
+            const transactionPromise = session.executeWrite(work);
+            return await Promise.race([transactionPromise, timeoutPromise]);
         }
         catch (error) {
             logger_1.logger.error('Transaction execution failed', error);
             throw error;
         }
         finally {
-            await session.close();
+            if (shouldClose) {
+                await this.safeCloseSession(session);
+            }
         }
     }
     async initializeSchema() {
@@ -148,8 +223,98 @@ class Neo4jService {
         }
     }
     async close() {
+        this.isShuttingDown = true;
+        // Stop pool cleanup
+        if (this.poolCleanupInterval) {
+            clearInterval(this.poolCleanupInterval);
+            this.poolCleanupInterval = null;
+        }
+        // Close all pooled sessions
+        const closePromises = [];
+        for (const [key, poolEntry] of this.sessionPool) {
+            closePromises.push(this.safeCloseSession(poolEntry.session));
+        }
+        await Promise.all(closePromises);
+        this.sessionPool.clear();
+        // Close driver
         await this.driver.close();
         logger_1.logger.info('Neo4j connection closed');
+    }
+    startPoolCleanup() {
+        this.poolCleanupInterval = setInterval(() => {
+            this.cleanupExpiredSessions();
+        }, 10000); // Clean up every 10 seconds
+    }
+    cleanupExpiredSessions() {
+        if (this.isShuttingDown)
+            return;
+        const now = Date.now();
+        const expiredKeys = [];
+        for (const [key, poolEntry] of this.sessionPool) {
+            if (now - poolEntry.lastUsed > this.sessionTTL) {
+                expiredKeys.push(key);
+            }
+        }
+        expiredKeys.forEach(key => {
+            const poolEntry = this.sessionPool.get(key);
+            if (poolEntry) {
+                this.cleanupSession(key, poolEntry.session);
+            }
+        });
+    }
+    cleanupSession(key, session) {
+        this.sessionPool.delete(key);
+        this.safeCloseSession(session).catch(error => {
+            logger_1.logger.warn(`Failed to close session ${key}:`, error);
+        });
+    }
+    async safeCloseSession(session) {
+        try {
+            await session.close();
+        }
+        catch (error) {
+            logger_1.logger.warn('Failed to close session gracefully:', error);
+        }
+    }
+    getPoolStats() {
+        return {
+            poolSize: this.sessionPool.size,
+            maxPoolSize: this.maxPoolSize,
+            activeSessions: Array.from(this.sessionPool.values())
+                .filter(entry => Date.now() - entry.lastUsed < this.sessionTTL).length
+        };
+    }
+    async executeStreamingQuery(query, params = {}, database, batchSize = 1000) {
+        return this.createStreamingQuery(query, params, database, batchSize);
+    }
+    async *createStreamingQuery(query, params, database, batchSize = 1000) {
+        const session = this.driver.session({
+            database: database || neo4j_driver_1.default.session.WRITE,
+            defaultAccessMode: neo4j_driver_1.default.session.READ,
+        });
+        try {
+            let skip = 0;
+            let hasMore = true;
+            while (hasMore) {
+                const paginatedQuery = `${query} SKIP ${skip} LIMIT ${batchSize}`;
+                const result = await session.run(paginatedQuery, params);
+                const records = result.records.map(record => record.toObject());
+                if (records.length === 0) {
+                    hasMore = false;
+                }
+                else {
+                    yield records;
+                    skip += batchSize;
+                    // Check if we got fewer records than requested (end of data)
+                    if (records.length < batchSize) {
+                        hasMore = false;
+                    }
+                }
+            }
+        }
+        finally {
+            await this.safeCloseSession(session);
+        }
     }
 }
 exports.Neo4jService = Neo4jService;

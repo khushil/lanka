@@ -1,5 +1,14 @@
 version: '3.8'
 
+# Docker secrets for production deployment
+secrets:
+  neo4j_password:
+    external: true
+  mongodb_password:
+    external: true
+  redis_password:
+    external: true
+
 services:
   neo4j:
     image: neo4j:5-community
@@ -9,7 +18,8 @@ services:
       - "7473:7473"  # HTTPS
       - "7687:7687"  # Bolt
     environment:
-      - NEO4J_AUTH=neo4j/lanka2025
+      # Use environment variables for authentication - no hardcoded passwords
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?NEO4J_PASSWORD required}
       - NEO4J_dbms_memory_pagecache_size=1G
       - NEO4J_dbms_memory_heap_initial__size=1G
       - NEO4J_dbms_memory_heap_max__size=2G
@@ -23,6 +33,15 @@ services:
       - neo4j_plugins:/plugins
     networks:
       - lanka-network
+    # Use secrets for production deployment
+    secrets:
+      - neo4j_password
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD} 'RETURN 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   mongodb:
     image: mongo:7
@@ -30,31 +49,59 @@ services:
     ports:
       - "27017:27017"
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=lanka
-      - MONGO_INITDB_ROOT_PASSWORD=lanka2025
-      - MONGO_INITDB_DATABASE=lanka
+      # Use environment variables - no hardcoded passwords
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME:-lanka}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD:?MONGODB_PASSWORD required}
+      - MONGO_INITDB_DATABASE=${MONGODB_DATABASE:-lanka}
     volumes:
       - mongodb_data:/data/db
     networks:
       - lanka-network
+    secrets:
+      - mongodb_password
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' --quiet"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   redis:
     image: redis:7-alpine
     container_name: lanka-redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+    command: >
+      sh -c "if [ -n \"${REDIS_PASSWORD}\" ]; then 
+               redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}; 
+             else 
+               redis-server --appendonly yes; 
+             fi"
     volumes:
       - redis_data:/data
     networks:
       - lanka-network
+    secrets:
+      - redis_password
+    healthcheck:
+      test: >
+        sh -c "if [ -n \"${REDIS_PASSWORD}\" ]; then 
+                 redis-cli -a ${REDIS_PASSWORD} ping; 
+               else 
+                 redis-cli ping; 
+               fi"
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
     container_name: lanka-elasticsearch
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
+      # Security configuration - use environment variables
+      - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-false}
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-}
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
@@ -63,6 +110,11 @@ services:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
       - lanka-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   kafka:
     image: confluentinc/cp-kafka:7.5.3
@@ -76,10 +128,19 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # Security configuration using environment variables
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
+      KAFKA_SASL_JAAS_CONFIG: ${KAFKA_SASL_JAAS_CONFIG:-}
     volumes:
       - kafka_data:/var/lib/kafka/data
     networks:
       - lanka-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.3
@@ -89,11 +150,19 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      # Security configuration using environment variables
+      ZOOKEEPER_AUTH_PROVIDER_1: ${ZOOKEEPER_AUTH_PROVIDER:-}
+      ZOOKEEPER_REQUIRE_CLIENT_AUTH_SCHEME: ${ZOOKEEPER_REQUIRE_CLIENT_AUTH:-}
     volumes:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_logs:/var/lib/zookeeper/log
     networks:
       - lanka-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   neo4j_data:

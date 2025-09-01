@@ -1,17 +1,22 @@
 import { GraphQLSchema } from 'graphql';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { requirementsTypeDefs } from '../../modules/requirements/graphql/requirements.schema';
-import { requirementsResolvers } from '../../modules/requirements/graphql/requirements.resolvers';
+import { requirementsResolvers } from '../../modules/requirements/graphql/requirements.resolvers.secured';
+import { optimizedRequirementsResolvers } from '../../modules/requirements/graphql/requirements.resolvers.optimized';
 import { architectureTypeDefs } from '../../modules/architecture/graphql/architecture.schema';
-import { architectureResolvers } from '../../modules/architecture/graphql/architecture.resolvers';
+import { architectureResolvers } from '../../modules/architecture/graphql/architecture.resolvers.secured';
+import { optimizedArchitectureResolvers } from '../../modules/architecture/graphql/architecture.resolvers.optimized';
+import { devOpsResolvers } from '../../modules/development/graphql/devops.resolvers.secured';
 
 const baseTypeDefs = `
   type Query {
     health: String!
+    dataLoaderMetrics: DataLoaderMetrics
   }
 
   type Mutation {
     _empty: String
+    clearDataLoaderCaches(pattern: String): CacheOperationResult
   }
 
   type Subscription {
@@ -20,6 +25,18 @@ const baseTypeDefs = `
 
   scalar Date
   scalar JSON
+
+  type DataLoaderMetrics {
+    metrics: JSON!
+    report: JSON!
+    timestamp: String!
+  }
+
+  type CacheOperationResult {
+    success: Boolean!
+    message: String!
+    timestamp: String!
+  }
 `;
 
 const baseResolvers = {
@@ -53,11 +70,14 @@ export async function createGraphQLSchema(): Promise<GraphQLSchema> {
     // developmentTypeDefs,
   ];
 
+  // Use optimized resolvers when DataLoaders are available
+  const useOptimizedResolvers = process.env.USE_OPTIMIZED_RESOLVERS !== 'false';
+  
   const resolvers = [
     baseResolvers,
-    requirementsResolvers,
-    architectureResolvers,
-    // developmentResolvers,
+    useOptimizedResolvers ? optimizedRequirementsResolvers : requirementsResolvers,
+    useOptimizedResolvers ? optimizedArchitectureResolvers : architectureResolvers,
+    devOpsResolvers,
   ];
 
   return makeExecutableSchema({

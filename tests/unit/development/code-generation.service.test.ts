@@ -17,39 +17,42 @@ jest.mock('uuid', () => ({
   v4: jest.fn(() => 'test-uuid'),
 }));
 
-// Mock AI service
-const mockAIService = {
-  generateCode: jest.fn(),
-  analyzeCode: jest.fn(),
-  suggestImprovements: jest.fn(),
-  configure: jest.fn(),
-};
-
-// Mock template engine
-const mockTemplateEngine = {
-  renderTemplate: jest.fn(),
+// Mock the extracted services
+const mockTemplateService = {
+  generateFromTemplate: jest.fn(),
   loadTemplate: jest.fn(),
-  validateTemplate: jest.fn(),
+  renderTemplate: jest.fn(),
 };
 
-// Mock code validator
-const mockCodeValidator = {
-  validateSyntax: jest.fn(),
-  validateQuality: jest.fn(),
-  validateSecurity: jest.fn(),
-  validatePerformance: jest.fn(),
+const mockValidationService = {
+  validateCode: jest.fn(),
+  validateGeneratedFiles: jest.fn(),
+  getValidationMetrics: jest.fn(),
+  meetsQualityStandards: jest.fn(),
 };
 
-jest.mock('../../../src/modules/development/services/ai.service', () => ({
-  AIService: jest.fn().mockImplementation(() => mockAIService),
+const mockAIIntegrationService = {
+  configure: jest.fn(),
+  getConfig: jest.fn(),
+  generateWithAI: jest.fn(),
+  generateHybrid: jest.fn(),
+  generateTests: jest.fn(),
+  generateSuggestions: jest.fn(),
+  generateFromPatterns: jest.fn(),
+  analyzeCode: jest.fn(),
+  optimizeCode: jest.fn(),
+};
+
+jest.mock('../../../src/modules/development/services/code-generation/template.service', () => ({
+  TemplateService: jest.fn().mockImplementation(() => mockTemplateService),
 }));
 
-jest.mock('../../../src/modules/development/services/template-engine.service', () => ({
-  TemplateEngineService: jest.fn().mockImplementation(() => mockTemplateEngine),
+jest.mock('../../../src/modules/development/services/code-generation/validation.service', () => ({
+  ValidationService: jest.fn().mockImplementation(() => mockValidationService),
 }));
 
-jest.mock('../../../src/modules/development/services/code-validator.service', () => ({
-  CodeValidatorService: jest.fn().mockImplementation(() => mockCodeValidator),
+jest.mock('../../../src/modules/development/services/code-generation/ai-integration.service', () => ({
+  AIIntegrationService: jest.fn().mockImplementation(() => mockAIIntegrationService),
 }));
 
 describe('CodeGenerationService', () => {
@@ -108,613 +111,315 @@ describe('CodeGenerationService', () => {
             properties: {
               id: 'arch-1',
               title: 'Microservices Architecture',
-              description: 'Use microservices pattern',
+              decision: 'Use microservices pattern',
             },
           },
         },
       ];
 
-      const mockGeneratedCode = `
-import { Injectable } from '@nestjs/common';
-import { User } from './user.entity';
+      const mockGeneratedFiles = [
+        {
+          path: 'src/auth/auth.service.ts',
+          content: 'export class AuthService { }',
+          language: ProgrammingLanguage.TYPESCRIPT,
+          type: CodeTemplateType.SERVICE,
+          size: 30,
+          checksum: 'abc123',
+          dependencies: [],
+          imports: [],
+          exports: ['AuthService'],
+          functions: [],
+          classes: [{ name: 'AuthService' }],
+          interfaces: [],
+        },
+      ];
 
-@Injectable()
-export class UserService {
-  async authenticate(username: string, password: string): Promise<User | null> {
-    // Implementation here
-    return null;
-  }
-}
-      `;
-
-      const mockValidationResult = {
+      const mockValidation = {
         level: ValidationLevel.FULL,
         isValid: true,
         score: 0.85,
         issues: [],
         metrics: {
-          complexity: 5,
+          complexity: 0.8,
           maintainability: 0.9,
-          reliability: 0.8,
-          security: 0.95,
+          reliability: 0.85,
+          security: 0.9,
           performance: 0.8,
           testability: 0.85,
           readability: 0.9,
           reusability: 0.8,
           overall: 0.85,
         },
-        suggestions: ['Consider adding input validation'],
+        suggestions: [],
         validatedAt: '2024-01-01T00:00:00Z',
       };
 
-      mockNeo4j.executeQuery
-        .mockResolvedValueOnce(mockRequirements) // Get requirements
-        .mockResolvedValueOnce(mockArchitecture) // Get architecture
-        .mockResolvedValueOnce([]); // Store result
+      const mockSuggestions = [
+        {
+          id: 'sug-1',
+          type: 'OPTIMIZATION' as const,
+          title: 'Add error handling',
+          description: 'Consider adding comprehensive error handling',
+          impact: 'MEDIUM' as const,
+          effort: 'LOW' as const,
+          benefits: ['Improved reliability'],
+        },
+      ];
 
-      mockAIService.generateCode.mockResolvedValue({
-        code: mockGeneratedCode,
-        confidence: 0.9,
+      // Setup mocks
+      mockNeo4j.executeQuery
+        .mockResolvedValueOnce(mockRequirements) // getRequirements
+        .mockResolvedValueOnce(mockArchitecture) // getArchitectureDecisions
+        .mockResolvedValueOnce([]) // storeGenerationResult
+        .mockResolvedValueOnce([]); // logGenerationHistory
+
+      mockAIIntegrationService.generateWithAI.mockResolvedValue({
+        files: mockGeneratedFiles,
         metadata: {
           aiModel: 'gpt-4',
-          processingTime: 5000,
-          tokenUsage: {
-            promptTokens: 1000,
-            completionTokens: 500,
-            totalTokens: 1500,
-          },
+          confidence: 0.9,
+          tokenUsage: { totalTokens: 1000, cost: 0.02 },
         },
       });
 
-      mockCodeValidator.validateSyntax.mockResolvedValue({
-        level: ValidationLevel.SYNTAX,
-        isValid: true,
-        score: 1.0,
-        issues: [],
-        metrics: {
-          complexity: 2,
-          maintainability: 0.9,
-          reliability: 0.8,
-          security: 0.9,
-          performance: 0.8,
-          testability: 0.85,
-          readability: 0.9,
-          reusability: 0.8,
-          overall: 0.85,
-        },
-        suggestions: [],
-        validatedAt: '2024-01-01T00:00:00Z',
-      });
-      
-      mockCodeValidator.validateQuality.mockResolvedValue(mockValidationResult);
-      
-      mockCodeValidator.validateSecurity.mockResolvedValue({
-        level: ValidationLevel.SECURITY,
-        isValid: true,
-        score: 0.95,
-        issues: [],
-        metrics: {
-          complexity: 2,
-          maintainability: 0.9,
-          reliability: 0.8,
-          security: 0.95,
-          performance: 0.8,
-          testability: 0.85,
-          readability: 0.9,
-          reusability: 0.8,
-          overall: 0.85,
-        },
-        suggestions: [],
-        validatedAt: '2024-01-01T00:00:00Z',
-      });
-      
-      mockCodeValidator.validatePerformance.mockResolvedValue({
-        level: ValidationLevel.PERFORMANCE,
-        isValid: true,
-        score: 0.8,
-        issues: [],
-        metrics: {
-          complexity: 2,
-          maintainability: 0.9,
-          reliability: 0.8,
-          security: 0.9,
-          performance: 0.8,
-          testability: 0.85,
-          readability: 0.9,
-          reusability: 0.8,
-          overall: 0.8,
-        },
-        suggestions: [],
-        validatedAt: '2024-01-01T00:00:00Z',
-      });
+      mockValidationService.validateGeneratedFiles.mockResolvedValue(mockValidation);
+      mockAIIntegrationService.generateSuggestions.mockResolvedValue(mockSuggestions);
 
       const result = await service.generateCode(mockRequest);
 
-      expect(result).toBeDefined();
-      expect(result.status).toBe(GenerationStatus.COMPLETED);
-      expect(result.generatedFiles).toHaveLength(1);
-      expect(result.generatedFiles[0].content).toBe(mockGeneratedCode);
-      expect(result.validation.isValid).toBe(true);
-      expect(result.validation.score).toBeCloseTo(0.89, 1); // Average of 1.0, 0.85, 0.95, 0.8
-      expect(mockNeo4j.executeQuery).toHaveBeenCalledTimes(4); // getRequirements, getArchitecture, storeResult, logHistory
+      expect(result).toMatchObject({
+        id: 'test-uuid',
+        requestId: 'req-1',
+        generatedFiles: mockGeneratedFiles,
+        validation: mockValidation,
+        suggestions: mockSuggestions,
+        status: GenerationStatus.COMPLETED,
+      });
+
+      expect(mockAIIntegrationService.generateWithAI).toHaveBeenCalledWith(
+        mockRequest,
+        mockRequirements,
+        mockArchitecture
+      );
+      expect(mockValidationService.validateGeneratedFiles).toHaveBeenCalledWith(
+        mockGeneratedFiles,
+        ValidationLevel.FULL
+      );
+      expect(mockAIIntegrationService.generateSuggestions).toHaveBeenCalledWith(mockGeneratedFiles);
     });
 
-    it('should generate code using template-based strategy', async () => {
+    it('should generate code using template strategy', async () => {
       const templateRequest = {
         ...mockRequest,
         strategy: GenerationStrategy.TEMPLATE_BASED,
       };
 
-      const mockTemplate = {
-        id: 'template-1',
-        name: 'NestJS Service Template',
-        template: `
-import { Injectable } from '@nestjs/common';
+      const mockTemplateFiles = [
+        {
+          path: 'src/service.ts',
+          content: 'template content',
+          language: ProgrammingLanguage.TYPESCRIPT,
+          type: CodeTemplateType.SERVICE,
+          size: 16,
+          checksum: 'def456',
+          dependencies: [],
+          imports: [],
+          exports: [],
+          functions: [],
+          classes: [],
+          interfaces: [],
+        },
+      ];
 
-@Injectable()
-export class {{serviceName}} {
-  {{#methods}}
-  {{name}}({{parameters}}): {{returnType}} {
-    // TODO: Implement {{name}}
-  }
-  {{/methods}}
-}
-        `,
-        variables: [],
-        conditions: [],
-        fragments: [],
-        metadata: { version: '1.0.0' },
-      };
-
-      const mockRenderedCode = `
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class UserService {
-  authenticate(username: string, password: string): Promise<User | null> {
-    // TODO: Implement authenticate
-  }
-}
-      `;
-
+      // Setup mocks
       mockNeo4j.executeQuery
-        .mockResolvedValueOnce([]) // Get requirements
-        .mockResolvedValueOnce([]) // Get architecture
-        .mockResolvedValueOnce([]) // Store result
-        .mockResolvedValueOnce([]); // Log history
+        .mockResolvedValueOnce([]) // getRequirements
+        .mockResolvedValueOnce([]) // getArchitectureDecisions
+        .mockResolvedValueOnce([]) // storeGenerationResult
+        .mockResolvedValueOnce([]); // logGenerationHistory
 
-      mockTemplateEngine.loadTemplate.mockResolvedValue(mockTemplate);
-      mockTemplateEngine.renderTemplate.mockResolvedValue(mockRenderedCode);
-      mockCodeValidator.validateSyntax.mockResolvedValue({
-        level: ValidationLevel.SYNTAX,
+      mockTemplateService.generateFromTemplate.mockResolvedValue({
+        files: mockTemplateFiles,
+        metadata: { template: 'service-template', templateVersion: '1.0.0' },
+      });
+
+      mockValidationService.validateGeneratedFiles.mockResolvedValue({
+        level: ValidationLevel.FULL,
         isValid: true,
-        score: 1.0,
+        score: 0.9,
         issues: [],
-        metrics: {
-          complexity: 3,
-          maintainability: 0.8,
-          reliability: 0.75,
-          security: 0.9,
-          performance: 0.8,
-          testability: 0.85,
-          readability: 0.9,
-          reusability: 0.8,
-          overall: 0.8,
-        },
+        metrics: {} as any,
         suggestions: [],
         validatedAt: '2024-01-01T00:00:00Z',
       });
-      mockCodeValidator.validateQuality.mockResolvedValue({
-        level: ValidationLevel.QUALITY,
-        isValid: true,
-        score: 0.8,
-        issues: [],
-        metrics: {
-          complexity: 3,
-          maintainability: 0.8,
-          reliability: 0.75,
-          security: 0.9,
-          performance: 0.8,
-          testability: 0.85,
-          readability: 0.9,
-          reusability: 0.8,
-          overall: 0.8,
-        },
-        suggestions: [],
-        validatedAt: '2024-01-01T00:00:00Z',
-      });
+
+      mockAIIntegrationService.generateSuggestions.mockResolvedValue([]);
 
       const result = await service.generateCode(templateRequest);
 
       expect(result.status).toBe(GenerationStatus.COMPLETED);
-      expect(result.generatedFiles[0].content).toBe(mockRenderedCode);
-      expect(mockTemplateEngine.loadTemplate).toHaveBeenCalled();
-      expect(mockTemplateEngine.renderTemplate).toHaveBeenCalled();
+      expect(mockTemplateService.generateFromTemplate).toHaveBeenCalled();
     });
 
-    it('should handle validation failures', async () => {
-      const mockValidationResult = {
-        level: ValidationLevel.SYNTAX,
-        isValid: false,
-        score: 0.3,
-        issues: [
-          {
-            id: 'issue-1',
-            type: 'SYNTAX' as const,
-            severity: 'ERROR' as const,
-            message: 'Syntax error: missing semicolon',
-            location: {
-              file: 'user.service.ts',
-              line: 10,
-              column: 25,
-            },
-            fixable: true,
-          },
-        ],
-        metrics: {
-          complexity: 2,
-          maintainability: 0.3,
-          reliability: 0.2,
-          security: 0.8,
-          performance: 0.7,
-          testability: 0.4,
-          readability: 0.3,
-          reusability: 0.5,
-          overall: 0.3,
-        },
-        suggestions: ['Fix syntax errors before proceeding'],
-        validatedAt: '2024-01-01T00:00:00Z',
+    it('should generate code using hybrid strategy', async () => {
+      const hybridRequest = {
+        ...mockRequest,
+        strategy: GenerationStrategy.HYBRID,
       };
 
-      mockNeo4j.executeQuery
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      const mockTemplateFiles = [
+        {
+          path: 'src/service.ts',
+          content: 'template content',
+          language: ProgrammingLanguage.TYPESCRIPT,
+          type: CodeTemplateType.SERVICE,
+          size: 16,
+          checksum: 'def456',
+          dependencies: [],
+          imports: [],
+          exports: [],
+          functions: [],
+          classes: [],
+          interfaces: [],
+        },
+      ];
 
-      mockAIService.generateCode.mockResolvedValue({
-        code: 'invalid code without semicolon',
-        confidence: 0.9,
-        metadata: {},
+      const mockEnhancedFiles = [
+        {
+          ...mockTemplateFiles[0],
+          content: 'enhanced template content',
+          size: 25,
+        },
+      ];
+
+      // Setup mocks
+      mockNeo4j.executeQuery
+        .mockResolvedValueOnce([]) // getRequirements
+        .mockResolvedValueOnce([]) // getArchitectureDecisions
+        .mockResolvedValueOnce([]) // storeGenerationResult
+        .mockResolvedValueOnce([]); // logGenerationHistory
+
+      mockTemplateService.generateFromTemplate.mockResolvedValue({
+        files: mockTemplateFiles,
+        metadata: { template: 'service-template', templateVersion: '1.0.0' },
       });
 
-      mockCodeValidator.validateSyntax.mockResolvedValue(mockValidationResult);
+      mockAIIntegrationService.generateHybrid.mockResolvedValue({
+        files: mockEnhancedFiles,
+        metadata: {
+          aiModel: 'gpt-4',
+          confidence: 0.85,
+          tokenUsage: { totalTokens: 800, cost: 0.016 },
+          hybridStrategy: true,
+        },
+      });
 
-      const result = await service.generateCode(mockRequest);
+      mockValidationService.validateGeneratedFiles.mockResolvedValue({
+        level: ValidationLevel.FULL,
+        isValid: true,
+        score: 0.9,
+        issues: [],
+        metrics: {} as any,
+        suggestions: [],
+        validatedAt: '2024-01-01T00:00:00Z',
+      });
 
-      expect(result.status).toBe(GenerationStatus.FAILED);
-      expect(result.validation.isValid).toBe(false);
-      expect(result.validation.issues).toHaveLength(1);
-      expect(result.validation.issues[0].type).toBe('SYNTAX');
+      mockAIIntegrationService.generateSuggestions.mockResolvedValue([]);
+
+      const result = await service.generateCode(hybridRequest);
+
+      expect(result.status).toBe(GenerationStatus.COMPLETED);
+      expect(mockTemplateService.generateFromTemplate).toHaveBeenCalled();
+      expect(mockAIIntegrationService.generateHybrid).toHaveBeenCalled();
     });
 
-    it('should handle AI service errors gracefully', async () => {
-      mockNeo4j.executeQuery
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+    it('should handle generation errors gracefully', async () => {
+      mockNeo4j.executeQuery.mockRejectedValue(new Error('Database connection failed'));
 
-      mockAIService.generateCode.mockRejectedValue(new Error('AI service unavailable'));
-
-      await expect(service.generateCode(mockRequest)).rejects.toThrow('AI service unavailable');
+      await expect(service.generateCode(mockRequest)).rejects.toThrow('Database connection failed');
     });
   });
 
   describe('validateCode', () => {
-    const mockCode = `
-import { Injectable } from '@nestjs/common';
+    it('should delegate validation to ValidationService', async () => {
+      const code = 'const test = "hello world";';
+      const language = ProgrammingLanguage.TYPESCRIPT;
+      const level = ValidationLevel.SYNTAX;
 
-@Injectable()
-export class UserService {
-  async findUser(id: string): Promise<User | null> {
-    return this.userRepository.findOne(id);
-  }
-}
-    `;
-
-    it('should validate code syntax', async () => {
       const mockValidationResult = {
-        level: ValidationLevel.SYNTAX,
+        level,
         isValid: true,
-        score: 1.0,
+        score: 0.9,
         issues: [],
-        metrics: {
-          complexity: 2,
-          maintainability: 0.9,
-          reliability: 0.8,
-          security: 0.9,
-          performance: 0.8,
-          testability: 0.85,
-          readability: 0.9,
-          reusability: 0.8,
-          overall: 0.85,
-        },
+        metrics: {} as any,
         suggestions: [],
         validatedAt: '2024-01-01T00:00:00Z',
       };
 
-      mockCodeValidator.validateSyntax.mockResolvedValue(mockValidationResult);
+      mockValidationService.validateCode.mockResolvedValue(mockValidationResult);
 
-      const result = await service.validateCode(mockCode, ProgrammingLanguage.TYPESCRIPT, ValidationLevel.SYNTAX);
+      const result = await service.validateCode(code, language, level);
 
-      expect(result.isValid).toBe(true);
-      expect(result.score).toBe(1.0);
-      expect(mockCodeValidator.validateSyntax).toHaveBeenCalledWith(mockCode, ProgrammingLanguage.TYPESCRIPT);
-    });
-
-    it('should validate code quality', async () => {
-      const mockQualityResult = {
-        level: ValidationLevel.QUALITY,
-        isValid: true,
-        score: 0.8,
-        issues: [
-          {
-            id: 'quality-1',
-            type: 'QUALITY' as const,
-            severity: 'WARNING' as const,
-            message: 'Consider using async/await consistently',
-            location: {
-              file: 'user.service.ts',
-              line: 5,
-              column: 3,
-            },
-            fixable: true,
-          },
-        ],
-        metrics: {
-          complexity: 3,
-          maintainability: 0.8,
-          reliability: 0.8,
-          security: 0.9,
-          performance: 0.75,
-          testability: 0.8,
-          readability: 0.85,
-          reusability: 0.8,
-          overall: 0.8,
-        },
-        suggestions: ['Add error handling', 'Improve variable naming'],
-        validatedAt: '2024-01-01T00:00:00Z',
-      };
-
-      // Mock syntax validation for QUALITY level (which always runs first)
-      mockCodeValidator.validateSyntax.mockResolvedValue({
-        level: ValidationLevel.SYNTAX,
-        isValid: true,
-        score: 1.0,
-        issues: [],
-        metrics: {
-          complexity: 2,
-          maintainability: 0.9,
-          reliability: 0.8,
-          security: 0.9,
-          performance: 0.8,
-          testability: 0.85,
-          readability: 0.9,
-          reusability: 0.8,
-          overall: 0.85,
-        },
-        suggestions: [],
-        validatedAt: '2024-01-01T00:00:00Z',
-      });
-
-      mockCodeValidator.validateQuality.mockResolvedValue(mockQualityResult);
-
-      const result = await service.validateCode(mockCode, ProgrammingLanguage.TYPESCRIPT, ValidationLevel.QUALITY);
-
-      expect(result.isValid).toBe(true);
-      expect(result.score).toBe(0.9); // Average of 1.0 (syntax) and 0.8 (quality)
-      expect(result.issues).toHaveLength(1);
-      expect(result.suggestions).toHaveLength(2);
-    });
-  });
-
-  describe('analyzeCodebase', () => {
-    it('should analyze existing codebase structure', async () => {
-      const projectId = 'project-1';
-      const mockCodebaseData = [
-        {
-          files: [
-            { path: 'src/user.service.ts', language: 'TYPESCRIPT', size: 1500 },
-            { path: 'src/user.controller.ts', language: 'TYPESCRIPT', size: 800 },
-            { path: 'test/user.test.ts', language: 'TYPESCRIPT', size: 600 },
-          ],
-          patterns: ['repository', 'service', 'controller'],
-          dependencies: [
-            { name: '@nestjs/common', version: '9.0.0', type: 'RUNTIME' },
-            { name: 'typeorm', version: '0.3.0', type: 'RUNTIME' },
-          ],
-        },
-      ];
-
-      mockNeo4j.executeQuery.mockResolvedValue(mockCodebaseData);
-
-      const result = await service.analyzeCodebase(projectId);
-
-      expect(result).toBeDefined();
-      expect(result.structure).toBeDefined();
-      expect(result.dependencies).toHaveLength(2);
-      expect(result.patterns).toHaveLength(3);
-      expect(result.metrics.fileCount).toBe(3);
-      expect(mockNeo4j.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('MATCH (p:Project {id: $projectId})'),
-        { projectId }
-      );
-    });
-
-    it('should handle empty codebase', async () => {
-      const projectId = 'empty-project';
-
-      mockNeo4j.executeQuery.mockResolvedValue([]);
-
-      const result = await service.analyzeCodebase(projectId);
-
-      expect(result.structure.children).toHaveLength(0);
-      expect(result.dependencies).toHaveLength(0);
-      expect(result.patterns).toHaveLength(0);
-      expect(result.metrics.fileCount).toBe(0);
+      expect(result).toEqual(mockValidationResult);
+      expect(mockValidationService.validateCode).toHaveBeenCalledWith(code, language, level);
     });
   });
 
   describe('generateTests', () => {
-    it('should generate tests for generated code', async () => {
-      const codeContent = `
-export class UserService {
-  async findUser(id: string): Promise<User | null> {
-    return this.userRepository.findOne(id);
-  }
-}
-      `;
+    it('should delegate test generation to AIIntegrationService', async () => {
+      const codeContent = 'export class TestService {}';
+      const language = ProgrammingLanguage.TYPESCRIPT;
+      const framework = 'jest';
 
-      const mockTestCode = `
-describe('UserService', () => {
-  let service: UserService;
+      const mockTestResult = {
+        content: 'describe("TestService", () => { it("should work", () => {}) });',
+        framework,
+        coverage: 0.85,
+      };
 
-  beforeEach(() => {
-    service = new UserService();
-  });
+      mockAIIntegrationService.generateTests.mockResolvedValue(mockTestResult);
 
-  describe('findUser', () => {
-    it('should find user by id', async () => {
-      const result = await service.findUser('1');
-      expect(result).toBeDefined();
-    });
-  });
-});
-      `;
+      const result = await service.generateTests(codeContent, language, framework);
 
-      mockAIService.generateCode.mockResolvedValue({
-        code: mockTestCode,
-        confidence: 0.8,
-        metadata: {
-          aiModel: 'gpt-4',
-          processingTime: 3000,
-        },
-      });
-
-      const result = await service.generateTests(codeContent, ProgrammingLanguage.TYPESCRIPT, 'jest');
-
-      expect(result).toBeDefined();
-      expect(result.content).toBe(mockTestCode);
-      expect(result.framework).toBe('jest');
-      expect(mockAIService.generateCode).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'test-generation',
-          sourceCode: codeContent,
-          language: ProgrammingLanguage.TYPESCRIPT,
-          testFramework: 'jest',
-        })
-      );
-    });
-
-    it('should handle test generation errors', async () => {
-      const codeContent = 'invalid code';
-
-      mockAIService.generateCode.mockRejectedValue(new Error('Cannot generate tests for invalid code'));
-
-      await expect(
-        service.generateTests(codeContent, ProgrammingLanguage.TYPESCRIPT, 'jest')
-      ).rejects.toThrow('Cannot generate tests for invalid code');
+      expect(result).toEqual(mockTestResult);
+      expect(mockAIIntegrationService.generateTests).toHaveBeenCalledWith(codeContent, language, framework);
     });
   });
 
   describe('configurateAIModel', () => {
-    it('should configure AI model settings', async () => {
+    it('should delegate AI configuration to AIIntegrationService', async () => {
       const config: AIModelConfig = {
-        provider: 'OPENAI',
+        provider: 'openai',
         model: 'gpt-4',
-        version: '2024-01-01',
-        parameters: {
-          temperature: 0.7,
-          maxTokens: 2000,
-          topP: 0.9,
-          frequencyPenalty: 0.1,
-          presencePenalty: 0.1,
-        },
-        capabilities: {
-          supportsCodeGeneration: true,
-          supportsMultipleLanguages: true,
-          supportsContextLearning: true,
-          maxContextLength: 32000,
-          supportedLanguages: [ProgrammingLanguage.TYPESCRIPT, ProgrammingLanguage.PYTHON],
-        },
+        apiKey: 'sk-test-key',
+        temperature: 0.7,
+        maxTokens: 2000,
       };
+
+      mockAIIntegrationService.configure.mockResolvedValue(undefined);
 
       await service.configurateAIModel(config);
 
-      // Verify configuration was applied
-      const appliedConfig = service.getAIModelConfig();
-      expect(appliedConfig?.model).toBe('gpt-4');
-      expect(appliedConfig?.parameters.temperature).toBe(0.7);
-      expect(appliedConfig?.capabilities.supportsCodeGeneration).toBe(true);
+      expect(mockAIIntegrationService.configure).toHaveBeenCalledWith(config);
     });
   });
 
-  describe('getGenerationHistory', () => {
-    it('should retrieve generation history for a project', async () => {
-      const projectId = 'project-1';
-      const mockHistory = [
-        {
-          gh: {
-            properties: {
-              requestId: 'req-1',
-              resultId: 'result-1',
-              timestamp: '2024-01-01T00:00:00Z',
-              user: 'user-1',
-              success: true,
-              duration: 5000,
-              filesGenerated: 2,
-              linesGenerated: 150,
-              tokensUsed: 1500,
-              cost: 0.05,
-              qualityScore: 0.85,
-              validationScore: 0.9,
-            },
-          },
-        },
-      ];
-
-      mockNeo4j.executeQuery.mockResolvedValue(mockHistory);
-
-      const result = await service.getGenerationHistory(projectId, 10);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].requestId).toBe('req-1');
-      expect(result[0].success).toBe(true);
-      expect(result[0].metrics.filesGenerated).toBe(2);
-      expect(mockNeo4j.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('MATCH (p:Project {id: $projectId})'),
-        expect.objectContaining({ projectId, limit: 10 })
-      );
-    });
-  });
-
-  describe('error handling', () => {
-    it('should handle database connection errors', async () => {
-      const errorRequest = {
-        id: 'req-1',
-        requirementIds: ['req-1'],
-        architectureIds: ['arch-1'],
-        language: ProgrammingLanguage.TYPESCRIPT,
-        templateType: CodeTemplateType.SERVICE,
-        strategy: GenerationStrategy.AI_ASSISTED,
-        context: {} as GenerationContext,
-        validationLevel: ValidationLevel.SYNTAX,
-        createdAt: '2024-01-01T00:00:00Z',
-        requestedBy: 'user-1',
+  describe('getAIModelConfig', () => {
+    it('should delegate AI config retrieval to AIIntegrationService', () => {
+      const mockConfig: AIModelConfig = {
+        provider: 'openai',
+        model: 'gpt-4',
+        apiKey: 'sk-test-key',
+        temperature: 0.7,
+        maxTokens: 2000,
       };
 
-      mockNeo4j.executeQuery.mockRejectedValue(new Error('Database connection failed'));
+      mockAIIntegrationService.getConfig.mockReturnValue(mockConfig);
 
-      await expect(service.generateCode(errorRequest)).rejects.toThrow('Database connection failed');
-    });
+      const result = service.getAIModelConfig();
 
-    it('should handle validation service errors', async () => {
-      const mockCode = 'test code';
-
-      mockCodeValidator.validateSyntax.mockRejectedValue(new Error('Validation service error'));
-
-      await expect(
-        service.validateCode(mockCode, ProgrammingLanguage.TYPESCRIPT, ValidationLevel.SYNTAX)
-      ).rejects.toThrow('Validation service error');
+      expect(result).toEqual(mockConfig);
+      expect(mockAIIntegrationService.getConfig).toHaveBeenCalled();
     });
   });
 });

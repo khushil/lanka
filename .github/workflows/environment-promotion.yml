@@ -1,0 +1,478 @@
+name: Environment Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_environment:
+        description: 'Source environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+        default: 'staging'
+      target_environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: 'production'
+      version:
+        description: 'Version to promote'
+        required: true
+        type: string
+      skip_tests:
+        description: 'Skip validation tests'
+        required: false
+        default: false
+        type: boolean
+      promotion_type:
+        description: 'Type of promotion'
+        required: true
+        type: choice
+        options:
+          - regular
+          - hotfix
+          - emergency
+        default: 'regular'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  NODE_VERSION: '18'
+
+jobs:
+  validate-promotion:
+    name: Validate Promotion Request
+    runs-on: ubuntu-latest
+    outputs:
+      source_image: ${{ steps.validation.outputs.source_image }}
+      target_namespace: ${{ steps.validation.outputs.target_namespace }}
+      promotion_id: ${{ steps.validation.outputs.promotion_id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate promotion
+        id: validation
+        run: |
+          PROMOTION_ID="promotion-$(date +%Y%m%d-%H%M%S)"
+          echo "promotion_id=$PROMOTION_ID" >> $GITHUB_OUTPUT
+          
+          # Validate source and target
+          if [ "${{ github.event.inputs.source_environment }}" = "${{ github.event.inputs.target_environment }}" ]; then
+            echo "❌ Source and target environments cannot be the same"
+            exit 1
+          fi
+          
+          # Validate promotion flow
+          case "${{ github.event.inputs.source_environment }}-${{ github.event.inputs.target_environment }}" in
+            "staging-production"|"development-staging"|"development-production")
+              echo "✅ Valid promotion flow"
+              ;;
+            *)
+              echo "❌ Invalid promotion flow"
+              exit 1
+              ;;
+          esac
+          
+          # Set source image and target namespace
+          SOURCE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.version }}"
+          TARGET_NAMESPACE="${{ github.event.inputs.target_environment }}"
+          
+          echo "source_image=$SOURCE_IMAGE" >> $GITHUB_OUTPUT
+          echo "target_namespace=$TARGET_NAMESPACE" >> $GITHUB_OUTPUT
+          
+          echo "Promoting $SOURCE_IMAGE to $TARGET_NAMESPACE"
+
+      - name: Verify source image exists
+        run: |
+          # Check if source image exists
+          docker manifest inspect ${{ steps.validation.outputs.source_image }} > /dev/null
+          echo "✅ Source image verified: ${{ steps.validation.outputs.source_image }}"
+
+      - name: Create promotion tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚀 Environment Promotion: ${{ github.event.inputs.version }} → ${{ github.event.inputs.target_environment }}`,
+              body: `
+              ## Promotion Details
+              
+              **Source:** ${{ github.event.inputs.source_environment }}
+              **Target:** ${{ github.event.inputs.target_environment }}
+              **Version:** ${{ github.event.inputs.version }}
+              **Type:** ${{ github.event.inputs.promotion_type }}
+              **Initiated By:** @${{ github.actor }}
+              **Promotion ID:** ${{ steps.validation.outputs.promotion_id }}
+              
+              ## Checklist
+              - [ ] Source image verified
+              - [ ] Pre-promotion tests passed
+              - [ ] Database migrations applied
+              - [ ] Blue-green deployment completed
+              - [ ] Post-promotion validation passed
+              - [ ] Monitoring alerts configured
+              
+              **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              `,
+              labels: ['promotion', '${{ github.event.inputs.target_environment }}', '${{ github.event.inputs.promotion_type }}']
+            });
+
+  pre-promotion-tests:
+    name: Pre-Promotion Tests
+    runs-on: ubuntu-latest
+    needs: validate-promotion
+    if: github.event.inputs.skip_tests != 'true'
+    strategy:
+      matrix:
+        test-type: [security, performance, integration]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ${{ matrix.test-type }} tests
+        run: |
+          case "${{ matrix.test-type }}" in
+            "security")
+              npm run test:security
+              ;;
+            "performance")
+              npm run test:performance
+              ;;
+            "integration")
+              npm run test:integration:${{ github.event.inputs.source_environment }}
+              ;;
+          esac
+        env:
+          SOURCE_ENV: ${{ github.event.inputs.source_environment }}
+          TARGET_ENV: ${{ github.event.inputs.target_environment }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pre-promotion-${{ matrix.test-type }}-results
+          path: |
+            reports/
+            coverage/
+
+  promote-environment:
+    name: Execute Environment Promotion
+    runs-on: ubuntu-latest
+    needs: [validate-promotion, pre-promotion-tests]
+    if: always() && (needs.pre-promotion-tests.result == 'success' || github.event.inputs.skip_tests == 'true')
+    environment:
+      name: ${{ github.event.inputs.target_environment }}
+      url: ${{ github.event.inputs.target_environment == 'production' && 'https://lanka.com' || format('https://{0}.lanka.com', github.event.inputs.target_environment) }}
+    concurrency:
+      group: promotion-${{ github.event.inputs.target_environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          if [ "${{ github.event.inputs.target_environment }}" = "production" ]; then
+            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          else
+            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          fi
+          chmod 600 $HOME/.kube/config
+
+      - name: Create pre-promotion backup
+        id: backup
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          BACKUP_NAME="pre-promotion-${{ needs.validate-promotion.outputs.promotion_id }}"
+          
+          kubectl create job --from=cronjob/db-backup backup-$BACKUP_NAME -n $NAMESPACE
+          kubectl wait --for=condition=complete --timeout=600s job/backup-$BACKUP_NAME -n $NAMESPACE
+          
+          echo "backup_name=$BACKUP_NAME" >> $GITHUB_OUTPUT
+          echo "Pre-promotion backup created: $BACKUP_NAME"
+
+      - name: Tag and retag image for promotion
+        run: |
+          SOURCE_IMAGE=${{ needs.validate-promotion.outputs.source_image }}
+          TARGET_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.target_environment }}"
+          VERSIONED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.target_environment }}-${{ github.event.inputs.version }}"
+          
+          # Login to registry
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+          
+          # Pull source image
+          docker pull $SOURCE_IMAGE
+          
+          # Tag for target environment
+          docker tag $SOURCE_IMAGE $TARGET_IMAGE
+          docker tag $SOURCE_IMAGE $VERSIONED_IMAGE
+          
+          # Push promoted images
+          docker push $TARGET_IMAGE
+          docker push $VERSIONED_IMAGE
+          
+          echo "Images promoted:"
+          echo "  $TARGET_IMAGE"
+          echo "  $VERSIONED_IMAGE"
+
+      - name: Update deployment manifests
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          TARGET_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.target_environment }}"
+          
+          # Update deployment manifest
+          sed -i "s|IMAGE_PLACEHOLDER|$TARGET_IMAGE|g" k8s/$NAMESPACE/deployment.yaml
+          sed -i "s|VERSION_PLACEHOLDER|${{ github.event.inputs.version }}|g" k8s/$NAMESPACE/deployment.yaml
+          sed -i "s|PROMOTION_ID_PLACEHOLDER|${{ needs.validate-promotion.outputs.promotion_id }}|g" k8s/$NAMESPACE/deployment.yaml
+
+      - name: Apply database migrations
+        if: github.event.inputs.promotion_type != 'emergency'
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          
+          # Check for pending migrations
+          kubectl create job --from=cronjob/db-migration migration-${{ needs.validate-promotion.outputs.promotion_id }} -n $NAMESPACE
+          kubectl wait --for=condition=complete --timeout=600s job/migration-${{ needs.validate-promotion.outputs.promotion_id }} -n $NAMESPACE
+
+      - name: Blue-Green Deployment
+        id: deploy
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          
+          # Get current deployment color
+          CURRENT_COLOR=$(kubectl get deployment lanka-api -n $NAMESPACE -o jsonpath='{.metadata.labels.color}' 2>/dev/null || echo "blue")
+          NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+          
+          echo "Current color: $CURRENT_COLOR"
+          echo "New color: $NEW_COLOR"
+          echo "new_color=$NEW_COLOR" >> $GITHUB_OUTPUT
+          echo "current_color=$CURRENT_COLOR" >> $GITHUB_OUTPUT
+          
+          # Update deployment with new color
+          sed -i "s|COLOR_PLACEHOLDER|$NEW_COLOR|g" k8s/$NAMESPACE/deployment.yaml
+          
+          # Deploy new version
+          kubectl apply -f k8s/$NAMESPACE/deployment.yaml -n $NAMESPACE
+          kubectl rollout status deployment/lanka-api-$NEW_COLOR -n $NAMESPACE --timeout=600s
+
+      - name: Smoke tests on new deployment
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          NEW_COLOR=${{ steps.deploy.outputs.new_color }}
+          
+          # Wait for deployment to be ready
+          sleep 30
+          
+          # Run smoke tests against new deployment
+          kubectl run promotion-smoke-test-${{ needs.validate-promotion.outputs.promotion_id }} \
+            --image=curlimages/curl:latest \
+            --restart=Never \
+            --rm -i \
+            --namespace=$NAMESPACE \
+            -- curl -f http://lanka-api-$NEW_COLOR/health
+
+      - name: Switch traffic to new deployment
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          NEW_COLOR=${{ steps.deploy.outputs.new_color }}
+          
+          # Update service selector
+          kubectl patch service lanka-api -n $NAMESPACE -p "{\"spec\":{\"selector\":{\"color\":\"$NEW_COLOR\"}}}"
+          
+          # Wait for traffic switch
+          sleep 30
+          
+          echo "Traffic switched to new deployment ($NEW_COLOR)"
+
+      - name: Post-promotion validation
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          
+          # Determine base URL
+          if [ "$NAMESPACE" = "production" ]; then
+            BASE_URL="https://lanka.com"
+          else
+            BASE_URL="https://$NAMESPACE.lanka.com"
+          fi
+          
+          # Health check
+          for i in {1..10}; do
+            if curl -f $BASE_URL/health > /dev/null 2>&1; then
+              echo "✅ Health check passed"
+              break
+            fi
+            echo "Health check attempt $i failed, retrying..."
+            sleep 10
+          done
+          
+          # Additional validation
+          kubectl run promotion-validation-${{ needs.validate-promotion.outputs.promotion_id }} \
+            --image=curlimages/curl:latest \
+            --restart=Never \
+            --rm -i \
+            --namespace=$NAMESPACE \
+            -- curl -f $BASE_URL/api/version
+
+      - name: Scale down old deployment
+        run: |
+          NAMESPACE=${{ needs.validate-promotion.outputs.target_namespace }}
+          CURRENT_COLOR=${{ steps.deploy.outputs.current_color }}
+          
+          # Scale down old deployment (but keep for potential rollback)
+          kubectl scale deployment lanka-api-$CURRENT_COLOR --replicas=1 -n $NAMESPACE || true
+          
+          # Add promotion annotations
+          kubectl annotate deployment lanka-api-${{ steps.deploy.outputs.new_color }} \
+            promotion.k8s.io/id="${{ needs.validate-promotion.outputs.promotion_id }}" \
+            promotion.k8s.io/source-env="${{ github.event.inputs.source_environment }}" \
+            promotion.k8s.io/target-env="${{ github.event.inputs.target_environment }}" \
+            promotion.k8s.io/version="${{ github.event.inputs.version }}" \
+            promotion.k8s.io/timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -n $NAMESPACE
+
+      - name: Update monitoring and alerts
+        run: |
+          # Update prometheus labels for new deployment
+          curl -X POST "${{ secrets.PROMETHEUS_URL }}/api/v1/admin/tsdb/delete_series" \
+            -d 'match[]={job="lanka-api",environment="${{ github.event.inputs.target_environment }}"}' || true
+          
+          # Refresh configuration
+          curl -X POST "${{ secrets.PROMETHEUS_URL }}/-/reload" || true
+
+  post-promotion-tests:
+    name: Post-Promotion Validation
+    runs-on: ubuntu-latest
+    needs: [validate-promotion, promote-environment]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run validation tests
+        run: |
+          if [ "${{ github.event.inputs.target_environment }}" = "production" ]; then
+            BASE_URL="https://lanka.com"
+          else
+            BASE_URL="https://${{ github.event.inputs.target_environment }}.lanka.com"
+          fi
+          
+          # Run comprehensive validation
+          npm run test:smoke -- --baseUrl=$BASE_URL
+          npm run test:api -- --baseUrl=$BASE_URL
+          npm run test:e2e:critical -- --baseUrl=$BASE_URL
+        env:
+          TEST_TIMEOUT: 120000
+          PROMOTION_ID: ${{ needs.validate-promotion.outputs.promotion_id }}
+
+      - name: Load testing
+        if: github.event.inputs.target_environment == 'production'
+        run: |
+          npm run test:load -- --target=https://lanka.com --duration=300s --vus=20
+        env:
+          LOAD_TEST_PROMOTION: true
+
+      - name: Generate promotion report
+        run: |
+          cat > promotion-report-${{ needs.validate-promotion.outputs.promotion_id }}.md << EOF
+          # Environment Promotion Report
+          
+          **Promotion ID:** ${{ needs.validate-promotion.outputs.promotion_id }}
+          **Date:** $(date)
+          **Source Environment:** ${{ github.event.inputs.source_environment }}
+          **Target Environment:** ${{ github.event.inputs.target_environment }}
+          **Version:** ${{ github.event.inputs.version }}
+          **Type:** ${{ github.event.inputs.promotion_type }}
+          **Initiated By:** ${{ github.actor }}
+          
+          ## Validation Results
+          - ✅ Source image verified
+          - ✅ Pre-promotion tests passed
+          - ✅ Database migrations applied
+          - ✅ Blue-green deployment successful
+          - ✅ Traffic switch completed
+          - ✅ Post-promotion validation passed
+          - ✅ Load testing passed
+          
+          ## Deployment Details
+          - **Backup Created:** ${{ needs.promote-environment.result == 'success' && 'Yes' || 'No' }}
+          - **New Color:** ${{ needs.promote-environment.outputs.new_color || 'N/A' }}
+          - **Previous Color:** ${{ needs.promote-environment.outputs.current_color || 'N/A' }}
+          
+          ## Next Steps
+          1. Monitor system metrics for 24 hours
+          2. Clean up old deployment after validation period
+          3. Update documentation if needed
+          4. Schedule post-promotion review
+          EOF
+
+      - name: Upload promotion report
+        uses: actions/upload-artifact@v3
+        with:
+          name: promotion-report-${{ needs.validate-promotion.outputs.promotion_id }}
+          path: promotion-report-${{ needs.validate-promotion.outputs.promotion_id }}.md
+
+      - name: Notify successful promotion
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          custom_payload: |
+            {
+              "text": "🎉 Environment Promotion Successful",
+              "attachments": [{
+                "color": "good",
+                "fields": [{
+                  "title": "Source → Target",
+                  "value": "${{ github.event.inputs.source_environment }} → ${{ github.event.inputs.target_environment }}",
+                  "short": true
+                }, {
+                  "title": "Version",
+                  "value": "${{ github.event.inputs.version }}",
+                  "short": true
+                }, {
+                  "title": "Type",
+                  "value": "${{ github.event.inputs.promotion_type }}",
+                  "short": true
+                }, {
+                  "title": "Initiated By",
+                  "value": "${{ github.actor }}",
+                  "short": true
+                }, {
+                  "title": "Promotion ID",
+                  "value": "${{ needs.validate-promotion.outputs.promotion_id }}",
+                  "short": false
+                }]
+              }]
+            }

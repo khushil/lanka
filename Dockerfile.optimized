@@ -1,0 +1,102 @@
+# Multi-stage optimized Docker build for Lanka Platform
+# Target: 30% size reduction with security hardening
+FROM node:18-alpine AS base
+
+# Install security updates and required tools
+RUN apk update && apk upgrade && \
+    apk add --no-cache dumb-init curl && \
+    rm -rf /var/cache/apk/*
+
+# Create app user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs lanka
+
+# Production dependencies stage
+FROM base AS deps
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies with optimizations
+RUN npm ci --only=production --no-audit --no-fund --prefer-offline && \
+    npm cache clean --force && \
+    rm -rf ~/.npm
+
+# Development image with hot reload
+FROM base AS dev
+WORKDIR /app
+
+# Install all dependencies for development
+COPY package*.json ./
+RUN npm ci --include=dev --no-audit --no-fund
+
+# Copy source code
+COPY . .
+
+# Set proper ownership
+RUN chown -R lanka:nodejs /app
+USER lanka
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:4000/health || exit 1
+
+EXPOSE 4000
+CMD ["dumb-init", "npm", "run", "dev"]
+
+# Build stage with multi-core compilation
+FROM base AS builder
+WORKDIR /app
+
+# Install build dependencies
+COPY package*.json ./
+RUN npm ci --include=dev --no-audit --no-fund
+
+# Copy source code
+COPY . .
+
+# Build with optimizations
+ENV NODE_ENV=production
+RUN npm run build && \
+    npm prune --production && \
+    npm cache clean --force && \
+    rm -rf node_modules/@types && \
+    rm -rf node_modules/typescript && \
+    rm -rf src tests docs *.md .git* && \
+    find node_modules -name '*.ts' -type f -delete && \
+    find node_modules -name '*.map' -type f -delete && \
+    find node_modules -name 'README*' -type f -delete && \
+    find node_modules -name 'CHANGELOG*' -type f -delete
+
+# Production image - optimized and hardened
+FROM base AS production
+
+# Set production environment
+ENV NODE_ENV=production
+ENV NPM_CONFIG_LOGLEVEL=warn
+ENV NODE_OPTIONS="--max-old-space-size=1024 --gc-interval=100"
+
+WORKDIR /app
+
+# Copy built application with minimal footprint
+COPY --from=builder --chown=lanka:nodejs /app/dist ./dist
+COPY --from=builder --chown=lanka:nodejs /app/package*.json ./
+COPY --from=deps --chown=lanka:nodejs /app/node_modules ./node_modules
+
+# Security hardening
+RUN chmod -R 555 /app && \
+    chmod -R 444 /app/package*.json
+
+# Switch to non-root user
+USER lanka
+
+# Expose port
+EXPOSE 4000
+
+# Enhanced health check
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:4000/health || exit 1
+
+# Start with dumb-init for proper signal handling
+CMD ["dumb-init", "node", "dist/index.js"]

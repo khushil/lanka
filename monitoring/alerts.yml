@@ -1,0 +1,281 @@
+# Prometheus Alert Rules for Lanka Platform
+# Performance degradation and resource usage monitoring
+
+groups:
+  - name: lanka-platform-performance
+    interval: 30s
+    rules:
+      # API Response Time Alert
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="lanka-platform"}[5m])) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          component: api
+        annotations:
+          summary: "High API response time detected"
+          description: "95th percentile API response time is {{ $value }}s, exceeding 200ms threshold for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-api-response-time"
+
+      # Critical API Response Time Alert
+      - alert: CriticalAPIResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="lanka-platform"}[5m])) > 1.0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: api
+        annotations:
+          summary: "Critical API response time detected"
+          description: "95th percentile API response time is {{ $value }}s, exceeding 1s critical threshold for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/critical-api-response-time"
+
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="lanka-platform", status_code=~"5.."}[5m]) > 1
+        for: 1m
+        labels:
+          severity: warning
+          team: platform
+          component: api
+        annotations:
+          summary: "High 5xx error rate detected"
+          description: "5xx error rate is {{ $value }} errors/sec for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-error-rate"
+
+      # Critical Error Rate Alert  
+      - alert: CriticalErrorRate
+        expr: rate(http_requests_total{job="lanka-platform", status_code=~"5.."}[5m]) > 5
+        for: 30s
+        labels:
+          severity: critical
+          team: platform
+          component: api
+        annotations:
+          summary: "Critical 5xx error rate detected"
+          description: "5xx error rate is {{ $value }} errors/sec for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/critical-error-rate"
+
+  - name: lanka-platform-resources
+    interval: 30s
+    rules:
+      # Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes{job="lanka-platform"} / 1024 / 1024) > 1000
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          component: memory
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}MB for {{ $labels.instance }}, exceeding 1GB threshold"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-memory-usage"
+
+      # Critical Memory Usage Alert
+      - alert: CriticalMemoryUsage
+        expr: (process_resident_memory_bytes{job="lanka-platform"} / 1024 / 1024) > 2000
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: memory
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is {{ $value }}MB for {{ $labels.instance }}, exceeding 2GB critical threshold"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/critical-memory-usage"
+
+      # Memory Leak Detection
+      - alert: MemoryLeakDetected
+        expr: increase(process_resident_memory_bytes{job="lanka-platform"}[10m]) > 100*1024*1024
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: memory
+        annotations:
+          summary: "Potential memory leak detected"
+          description: "Memory increased by {{ $value | humanizeBytes }} in 10 minutes for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/memory-leak"
+
+      # CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: (rate(process_cpu_user_seconds_total{job="lanka-platform"}[5m]) + rate(process_cpu_system_seconds_total{job="lanka-platform"}[5m])) * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+          team: platform
+          component: cpu
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-cpu-usage"
+
+      # Heap Usage Alert
+      - alert: HighHeapUsage
+        expr: (nodejs_heap_size_used_bytes{job="lanka-platform"} / nodejs_heap_size_total_bytes{job="lanka-platform"}) * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          component: heap
+        annotations:
+          summary: "High heap usage detected"
+          description: "Heap usage is {{ $value }}% for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-heap-usage"
+
+  - name: lanka-platform-database
+    interval: 30s
+    rules:
+      # Database Query Performance
+      - alert: SlowDatabaseQueries
+        expr: rate(neo4j_database_query_execution_latency_millis_sum{job="neo4j"}[5m]) / rate(neo4j_database_query_execution_latency_millis_count{job="neo4j"}[5m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query execution time is {{ $value }}ms"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/slow-database-queries"
+
+      # Database Connection Pool
+      - alert: DatabaseConnectionPoolHigh
+        expr: neo4j_database_pool_used_connections{job="neo4j"} / neo4j_database_pool_total_connections{job="neo4j"} * 100 > 80
+        for: 1m
+        labels:
+          severity: warning
+          team: platform
+          component: database
+        annotations:
+          summary: "Database connection pool usage high"
+          description: "Connection pool usage is {{ $value }}%"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-connection-pool"
+
+      # Database Down
+      - alert: DatabaseDown
+        expr: up{job="neo4j"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: database
+        annotations:
+          summary: "Database is down"
+          description: "Neo4j database is not responding"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/database-down"
+
+  - name: lanka-platform-business
+    interval: 60s
+    rules:
+      # Low User Activity
+      - alert: LowUserActivity
+        expr: rate(user_sessions_started_total[1h]) < 5
+        for: 30m
+        labels:
+          severity: warning
+          team: product
+          component: business
+        annotations:
+          summary: "Low user activity detected"
+          description: "Only {{ $value }} user sessions started in the last hour"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/low-user-activity"
+
+      # Requirements Creation Rate Drop
+      - alert: RequirementsCreationDrop
+        expr: rate(requirements_created_total[4h]) < rate(requirements_created_total[4h] offset 24h) * 0.5
+        for: 1h
+        labels:
+          severity: warning
+          team: product
+          component: business
+        annotations:
+          summary: "Requirements creation rate dropped significantly"
+          description: "Requirements creation rate is 50% lower than yesterday at this time"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/low-requirements-creation"
+
+  - name: lanka-platform-availability
+    interval: 30s
+    rules:
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job="lanka-platform"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: availability
+        annotations:
+          summary: "Lanka Platform service is down"
+          description: "{{ $labels.instance }} is not responding"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/service-down"
+
+      # Health Check Failure
+      - alert: HealthCheckFailure
+        expr: health_check_success{job="lanka-platform"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+          component: health
+        annotations:
+          summary: "Health check failures detected"
+          description: "Health checks failing for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/health-check-failure"
+
+      # File Descriptor Usage
+      - alert: HighFileDescriptorUsage
+        expr: process_open_fds{job="lanka-platform"} / process_max_fds{job="lanka-platform"} * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          component: system
+        annotations:
+          summary: "High file descriptor usage"
+          description: "File descriptor usage is {{ $value }}% for {{ $labels.instance }}"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-fd-usage"
+
+  - name: lanka-platform-cache
+    interval: 30s
+    rules:
+      # Cache Hit Rate Low
+      - alert: LowCacheHitRate
+        expr: rate(redis_keyspace_hits_total{job="redis"}[5m]) / (rate(redis_keyspace_hits_total{job="redis"}[5m]) + rate(redis_keyspace_misses_total{job="redis"}[5m])) * 100 < 80
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: cache
+        annotations:
+          summary: "Low cache hit rate detected"
+          description: "Cache hit rate is {{ $value }}%, below 80% threshold"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/low-cache-hit-rate"
+
+      # Cache Memory Usage High
+      - alert: HighCacheMemoryUsage
+        expr: redis_memory_used_bytes{job="redis"} / redis_memory_max_bytes{job="redis"} * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          component: cache
+        annotations:
+          summary: "High cache memory usage"
+          description: "Cache memory usage is {{ $value }}%"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/high-cache-memory"
+
+      # Cache Down
+      - alert: CacheDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: cache
+        annotations:
+          summary: "Cache service is down"
+          description: "Redis cache is not responding"
+          runbook_url: "https://wiki.lanka-platform.com/runbooks/cache-down"

@@ -3,9 +3,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NLPService = void 0;
 const requirement_types_1 = require("../types/requirement.types");
 const logger_1 = require("../../../core/logging/logger");
+const errors_1 = require("../../../core/errors");
 class NLPService {
     async analyzeRequirement(text) {
-        try {
+        return (0, errors_1.withErrorHandling)(async () => {
+            // Validate input
+            if (!text || text.trim().length === 0) {
+                throw errors_1.ErrorWrapper.validation(errors_1.ErrorCode.MISSING_REQUIRED_FIELD, 'Text is required for NLP analysis', { fieldErrors: { text: ['Text cannot be empty'] } });
+            }
+            if (text.length > 50000) {
+                throw errors_1.ErrorWrapper.validation(errors_1.ErrorCode.OUT_OF_RANGE, 'Text exceeds maximum length for analysis', { fieldErrors: { text: ['Text must be less than 50,000 characters'] } });
+            }
+            logger_1.logger.debug('Starting NLP analysis', { textLength: text.length });
             // Simplified NLP analysis for initial implementation
             // In production, this would use advanced NLP models
             const type = this.classifyRequirementType(text);
@@ -15,6 +24,12 @@ class NLPService {
             const keywords = this.extractKeywords(text);
             const embedding = this.generateEmbedding(text);
             const { completenessScore, qualityScore, suggestions } = this.assessQuality(text);
+            logger_1.logger.debug('NLP analysis completed', {
+                type,
+                priority,
+                completenessScore,
+                qualityScore
+            });
             return {
                 type,
                 priority,
@@ -26,11 +41,10 @@ class NLPService {
                 qualityScore,
                 suggestions,
             };
-        }
-        catch (error) {
-            logger_1.logger.error('NLP analysis failed', error);
-            throw error;
-        }
+        }, {
+            operation: 'nlp_analysis',
+            metadata: { textLength: text?.length || 0 }
+        })();
     }
     classifyRequirementType(text) {
         const lowerText = text.toLowerCase();

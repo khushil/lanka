@@ -1,5 +1,7 @@
 import { RequirementsService } from '../services/requirements.service';
 import { NLPService } from '../services/nlp.service';
+import { SecureQueryBuilder, InputValidator } from '../../../utils/secure-query-builder';
+import { logger } from '../../../core/logging/logger';
 
 export const requirementsResolvers = {
   Query: {
@@ -112,25 +114,35 @@ export const requirementsResolvers = {
       { id, input }: { id: string; input: any },
       context: any
     ) => {
-      // Simplified update - would be more comprehensive in production
-      const setClause = Object.keys(input)
-        .map(key => `r.${key} = $${key}`)
-        .join(', ');
+      try {
+        // Validate input parameters
+        InputValidator.validateGraphQLInput(input, {
+          title: { type: 'string', maxLength: 255 },
+          description: { type: 'string', maxLength: 2000 },
+          type: { type: 'string', maxLength: 50 },
+          status: { type: 'string', maxLength: 20 },
+          priority: { type: 'string', maxLength: 20 }
+        });
 
-      const query = `
-        MATCH (r:Requirement {id: $id})
-        SET ${setClause}, r.updatedAt = $updatedAt
-        RETURN r
-      `;
+        // Use secure query builder to prevent injection
+        const { query, params } = SecureQueryBuilder.buildSecureUpdateQuery(
+          'Requirement',
+          id,
+          input
+        );
 
-      const params = {
-        id,
-        ...input,
-        updatedAt: new Date().toISOString(),
-      };
+        const results = await context.services.neo4j.executeQuery(query, params);
+        
+        if (results.length === 0) {
+          throw new Error(`Requirement with id ${id} not found`);
+        }
 
-      const results = await context.services.neo4j.executeQuery(query, params);
-      return results[0]?.r.properties;
+        logger.info('Requirement updated successfully', { id, fieldCount: Object.keys(input).length });
+        return results[0]?.n.properties;
+      } catch (error) {
+        logger.error('Failed to update requirement', { id, input, error });
+        throw error;
+      }
     },
 
     approveRequirement: async (
@@ -147,26 +159,57 @@ export const requirementsResolvers = {
         requirement1Id,
         requirement2Id,
         relationship,
+        properties = {},
       }: {
         requirement1Id: string;
         requirement2Id: string;
         relationship: string;
+        properties?: Record<string, any>;
       },
       context: any
     ) => {
-      const query = `
-        MATCH (r1:Requirement {id: $requirement1Id})
-        MATCH (r2:Requirement {id: $requirement2Id})
-        CREATE (r1)-[:${relationship}]->(r2)
-        RETURN r1, r2
-      `;
+      try {
+        // Validate input parameters
+        if (!requirement1Id || !requirement2Id) {
+          throw new Error('Both requirement IDs are required');
+        }
 
-      const results = await context.services.neo4j.executeQuery(query, {
-        requirement1Id,
-        requirement2Id,
-      });
+        if (requirement1Id === requirement2Id) {
+          throw new Error('Cannot link requirement to itself');
+        }
 
-      return results.length > 0;
+        // Use secure query builder with relationship type validation
+        const { query, params } = SecureQueryBuilder.buildSecureRelationshipQuery(
+          'Requirement',
+          requirement1Id,
+          'Requirement',
+          requirement2Id,
+          relationship,
+          properties
+        );
+
+        const results = await context.services.neo4j.executeQuery(query, params);
+        
+        if (results.length === 0) {
+          throw new Error('Failed to create relationship - one or both requirements not found');
+        }
+
+        logger.info('Requirements linked successfully', { 
+          requirement1Id, 
+          requirement2Id, 
+          relationship 
+        });
+        
+        return true;
+      } catch (error) {
+        logger.error('Failed to link requirements', { 
+          requirement1Id, 
+          requirement2Id, 
+          relationship, 
+          error 
+        });
+        throw error;
+      }
     },
 
     resolveConflict: async (

@@ -1,0 +1,462 @@
+name: Infrastructure as Code - Lanka Platform
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infrastructure/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      action:
+        description: 'Terraform action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+env:
+  TF_VERSION: '1.5.7'
+  AWS_REGION: 'us-west-2'
+  TERRAFORM_DIR: './infrastructure'
+
+jobs:
+  # Terraform validation and security scanning
+  validate:
+    name: Validate Infrastructure
+    runs-on: ubuntu-latest
+    outputs:
+      tf-fmt: ${{ steps.fmt.outcome }}
+      tf-validate: ${{ steps.validate.outcome }}
+      security-scan: ${{ steps.security.outcome }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        continue-on-error: true
+
+      - name: Terraform Init
+        run: |
+          terraform init -backend=false
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Setup Checkov
+        run: pip install checkov
+
+      - name: Run Checkov Security Scan
+        id: security
+        run: |
+          checkov -d ${{ env.TERRAFORM_DIR }} --framework terraform \
+            --output cli --output junitxml --output-file-path /tmp/checkov-results.xml
+        continue-on-error: true
+
+      - name: Publish Checkov Results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: 'Checkov Security Scan'
+          path: '/tmp/checkov-results.xml'
+          reporter: 'java-junit'
+
+      - name: Comment PR with Validation Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `
+            ## Terraform Validation Results
+            
+            ### Format Check: \`${{ steps.fmt.outcome }}\`
+            ### Validation: \`${{ steps.validate.outcome }}\`  
+            ### Security Scan: \`${{ steps.security.outcome }}\`
+            
+            <details><summary>Show Details</summary>
+            
+            \`\`\`
+            ${{ steps.fmt.outputs.stdout }}
+            ${{ steps.validate.outputs.stdout }}
+            \`\`\`
+            
+            </details>
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+  # Development environment deployment
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: development
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -var-file="environments/dev.tfvars" \
+            -out=dev.tfplan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform Apply
+        run: terraform apply dev.tfplan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Update kubeconfig
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name $CLUSTER_NAME
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Deploy K8s resources
+        run: |
+          kubectl apply -f ../k8s/namespace.yaml
+          kubectl apply -k ../k8s/overlays/dev/
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Run smoke tests
+        run: |
+          timeout 300 bash -c 'until kubectl get pods -n lanka-development | grep Running; do sleep 10; done'
+          kubectl exec -n lanka-development deployment/lanka-platform-api -- curl -f http://localhost:4000/health
+
+  # Staging environment deployment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=staging/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -var-file="environments/staging.tfvars" \
+            -out=staging.tfplan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform Apply
+        run: terraform apply staging.tfplan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Update kubeconfig
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name $CLUSTER_NAME
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Deploy K8s resources
+        run: |
+          kubectl apply -f ../k8s/namespace.yaml
+          kubectl apply -k ../k8s/overlays/staging/
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Run integration tests
+        run: |
+          timeout 600 bash -c 'until kubectl get pods -n lanka-staging | grep Running; do sleep 10; done'
+          # Run comprehensive integration tests
+          npm run test:integration:staging
+
+      - name: Performance testing
+        run: |
+          # Run performance tests against staging
+          npm run test:performance:staging
+
+  # Production deployment (manual approval required)
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [validate, deploy-staging]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy:prod]'))
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Create backup
+        run: |
+          # Backup current infrastructure state
+          aws s3 cp s3://${{ secrets.TF_STATE_BUCKET }}/prod/terraform.tfstate \
+                    s3://${{ secrets.BACKUP_BUCKET }}/infrastructure/terraform.tfstate.backup.$(date +%Y%m%d-%H%M%S)
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -var-file="environments/prod.tfvars" \
+            -out=prod.tfplan \
+            -detailed-exitcode
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        continue-on-error: true
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply' || contains(github.event.head_commit.message, '[deploy:prod]')
+        run: terraform apply prod.tfplan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Update kubeconfig
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name $CLUSTER_NAME
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Blue-Green Deployment
+        run: |
+          # Deploy to green environment first
+          kubectl apply -k ../k8s/overlays/prod-green/
+          
+          # Wait for green deployment to be ready
+          kubectl rollout status deployment/lanka-platform-api-green -n lanka-platform --timeout=600s
+          
+          # Run smoke tests on green
+          kubectl exec -n lanka-platform deployment/lanka-platform-api-green -- curl -f http://localhost:4000/health
+          
+          # Switch traffic to green
+          kubectl patch service lanka-platform-api -n lanka-platform -p '{"spec":{"selector":{"version":"green"}}}'
+          
+          # Scale down blue environment after successful switch
+          sleep 300  # Give time for connections to drain
+          kubectl scale deployment/lanka-platform-api-blue -n lanka-platform --replicas=0
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Post-deployment verification
+        run: |
+          # Comprehensive health checks
+          timeout 600 bash -c 'until kubectl get pods -n lanka-platform | grep -E "Running|Completed"; do sleep 10; done'
+          
+          # External health check
+          curl -f https://api.lanka-platform.com/health
+          
+          # Database connectivity check
+          kubectl exec -n lanka-platform deployment/lanka-platform-api -- node scripts/db-health-check.js
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          kubectl patch service lanka-platform-api -n lanka-platform -p '{"spec":{"selector":{"version":"blue"}}}'
+          kubectl scale deployment/lanka-platform-api-blue -n lanka-platform --replicas=3
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data '{"text":"✅ Lanka Platform production deployment succeeded"}' \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          else
+            curl -X POST -H 'Content-type: application/json' \
+              --data '{"text":"❌ Lanka Platform production deployment failed"}' \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi
+
+  # Infrastructure drift detection
+  drift-detection:
+    name: Infrastructure Drift Detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Check for drift
+        run: |
+          if terraform plan -var-file="environments/${{ matrix.environment }}.tfvars" -detailed-exitcode; then
+            echo "No drift detected in ${{ matrix.environment }}"
+          else
+            echo "::warning::Infrastructure drift detected in ${{ matrix.environment }}"
+            # Send notification about drift
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"⚠️ Infrastructure drift detected in ${{ matrix.environment }} environment\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+  # Cost optimization analysis
+  cost-analysis:
+    name: Cost Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Infracost
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/.github/scripts/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Generate cost breakdown
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: |
+          for env in dev staging prod; do
+            cd ${{ env.TERRAFORM_DIR }}
+            terraform init -backend=false
+            infracost breakdown --path . --terraform-var-file="environments/${env}.tfvars" \
+              --format json --out-file="/tmp/${env}-cost.json"
+            cd -
+          done
+          
+          # Generate cost report
+          infracost diff --path /tmp/dev-cost.json --compare-to /tmp/staging-cost.json
+          infracost diff --path /tmp/staging-cost.json --compare-to /tmp/prod-cost.json
+
+      - name: Comment cost analysis
+        if: github.event_name == 'pull_request'
+        run: |
+          infracost comment github --path /tmp/*-cost.json \
+            --repo ${{ github.repository }} \
+            --github-token ${{ secrets.GITHUB_TOKEN }} \
+            --pull-request ${{ github.event.pull_request.number }}
+
+# Scheduled workflows
+on:
+  schedule:
+    # Run drift detection daily at 6 AM UTC
+    - cron: '0 6 * * *'
+    # Run cost analysis weekly on Mondays at 8 AM UTC  
+    - cron: '0 8 * * 1'

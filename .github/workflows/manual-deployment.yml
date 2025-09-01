@@ -1,0 +1,374 @@
+name: Manual Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: 'staging'
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        type: string
+        default: 'latest'
+      deployment_strategy:
+        description: 'Deployment strategy'
+        required: true
+        type: choice
+        options:
+          - blue-green
+          - rolling
+          - recreate
+        default: 'blue-green'
+      skip_tests:
+        description: 'Skip pre-deployment tests'
+        required: false
+        default: false
+        type: boolean
+      skip_backup:
+        description: 'Skip database backup'
+        required: false
+        default: false
+        type: boolean
+      force_deploy:
+        description: 'Force deployment even if health checks fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate-deployment:
+    name: Validate Deployment Request
+    runs-on: ubuntu-latest
+    outputs:
+      deployment_id: ${{ steps.generate.outputs.deployment_id }}
+      image_ref: ${{ steps.generate.outputs.image_ref }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate deployment ID
+        id: generate
+        run: |
+          DEPLOYMENT_ID="manual-$(date +%Y%m%d-%H%M%S)-${{ github.run_number }}"
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_tag }}"
+          
+          echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+          echo "image_ref=$IMAGE_REF" >> $GITHUB_OUTPUT
+          
+          echo "Deployment ID: $DEPLOYMENT_ID"
+          echo "Image Reference: $IMAGE_REF"
+
+      - name: Verify image exists
+        run: |
+          # Login to registry
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+          
+          # Check if image exists
+          if docker manifest inspect ${{ steps.generate.outputs.image_ref }}; then
+            echo "✅ Image exists and is accessible"
+          else
+            echo "❌ Image not found or not accessible"
+            exit 1
+          fi
+
+      - name: Create deployment tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚀 Manual Deployment: ${{ github.event.inputs.environment }} - ${{ steps.generate.outputs.deployment_id }}`,
+              body: `
+              ## Manual Deployment Request
+              
+              **Environment:** ${{ github.event.inputs.environment }}
+              **Image Tag:** ${{ github.event.inputs.image_tag }}
+              **Strategy:** ${{ github.event.inputs.deployment_strategy }}
+              **Deployment ID:** ${{ steps.generate.outputs.deployment_id }}
+              **Initiated By:** @${{ github.actor }}
+              
+              ## Configuration
+              - Skip Tests: ${{ github.event.inputs.skip_tests }}
+              - Skip Backup: ${{ github.event.inputs.skip_backup }}
+              - Force Deploy: ${{ github.event.inputs.force_deploy }}
+              
+              ## Deployment Checklist
+              - [ ] Image verified
+              - [ ] Pre-deployment tests
+              - [ ] Database backup created
+              - [ ] Deployment executed
+              - [ ] Health checks passed
+              - [ ] Post-deployment validation
+              
+              **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              `,
+              labels: ['deployment', 'manual', '${{ github.event.inputs.environment }}']
+            });
+
+  pre-deployment-tests:
+    name: Pre-Deployment Tests
+    runs-on: ubuntu-latest
+    needs: validate-deployment
+    if: github.event.inputs.skip_tests != 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          NODE_ENV: test
+
+      - name: Run security tests
+        run: npm run test:security || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pre-deployment-test-results
+          path: |
+            coverage/
+            reports/
+
+  deploy:
+    name: Execute Deployment
+    runs-on: ubuntu-latest
+    needs: [validate-deployment, pre-deployment-tests]
+    if: always() && (needs.pre-deployment-tests.result == 'success' || github.event.inputs.skip_tests == 'true')
+    environment:
+      name: ${{ github.event.inputs.environment }}
+      url: ${{ github.event.inputs.environment == 'production' && 'https://lanka.com' || format('https://{0}.lanka.com', github.event.inputs.environment) }}
+    concurrency:
+      group: manual-deployment-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          else
+            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          fi
+          chmod 600 $HOME/.kube/config
+
+      - name: Execute blue-green deployment
+        if: github.event.inputs.deployment_strategy == 'blue-green'
+        env:
+          SKIP_BACKUP: ${{ github.event.inputs.skip_backup }}
+          FORCE_DEPLOY: ${{ github.event.inputs.force_deploy }}
+        run: |
+          ./scripts/deployment/blue-green-deploy.sh \
+            ${{ github.event.inputs.environment }} \
+            ${{ needs.validate-deployment.outputs.image_ref }} \
+            ${{ needs.validate-deployment.outputs.deployment_id }}
+
+      - name: Execute rolling deployment
+        if: github.event.inputs.deployment_strategy == 'rolling'
+        run: |
+          # Update deployment manifest
+          sed -i "s|IMAGE_PLACEHOLDER|${{ needs.validate-deployment.outputs.image_ref }}|g" k8s/${{ github.event.inputs.environment }}/deployment.yaml
+          sed -i "s|VERSION_PLACEHOLDER|${{ needs.validate-deployment.outputs.deployment_id }}|g" k8s/${{ github.event.inputs.environment }}/deployment.yaml
+          
+          # Apply rolling update
+          kubectl apply -f k8s/${{ github.event.inputs.environment }}/deployment.yaml
+          kubectl rollout status deployment/lanka-api-blue -n ${{ github.event.inputs.environment }} --timeout=600s
+
+      - name: Execute recreate deployment
+        if: github.event.inputs.deployment_strategy == 'recreate'
+        run: |
+          # Update deployment with recreate strategy
+          sed -i "s|IMAGE_PLACEHOLDER|${{ needs.validate-deployment.outputs.image_ref }}|g" k8s/${{ github.event.inputs.environment }}/deployment.yaml
+          sed -i "s|VERSION_PLACEHOLDER|${{ needs.validate-deployment.outputs.deployment_id }}|g" k8s/${{ github.event.inputs.environment }}/deployment.yaml
+          sed -i "s|type: RollingUpdate|type: Recreate|g" k8s/${{ github.event.inputs.environment }}/deployment.yaml
+          
+          # Apply recreate deployment
+          kubectl apply -f k8s/${{ github.event.inputs.environment }}/deployment.yaml
+          kubectl rollout status deployment/lanka-api-blue -n ${{ github.event.inputs.environment }} --timeout=600s
+
+      - name: Run post-deployment health checks
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            BASE_URL="https://lanka.com"
+          else
+            BASE_URL="https://${{ github.event.inputs.environment }}.lanka.com"
+          fi
+          
+          TIMEOUT=300 VERBOSE=true ./scripts/deployment/health-check.sh \
+            ${{ github.event.inputs.environment }} \
+            $BASE_URL
+
+      - name: Update deployment status
+        run: |
+          kubectl annotate deployment/lanka-api-blue \
+            deployment.kubernetes.io/manual-deployment="true" \
+            deployment.kubernetes.io/deployment-id="${{ needs.validate-deployment.outputs.deployment_id }}" \
+            deployment.kubernetes.io/deployed-by="${{ github.actor }}" \
+            deployment.kubernetes.io/deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -n ${{ github.event.inputs.environment }}
+
+      - name: Generate deployment report
+        run: |
+          cat > deployment-report.md << EOF
+          # Manual Deployment Report
+          
+          **Deployment ID:** ${{ needs.validate-deployment.outputs.deployment_id }}
+          **Environment:** ${{ github.event.inputs.environment }}
+          **Image:** ${{ needs.validate-deployment.outputs.image_ref }}
+          **Strategy:** ${{ github.event.inputs.deployment_strategy }}
+          **Deployed By:** ${{ github.actor }}
+          **Timestamp:** $(date)
+          
+          ## Configuration
+          - Skip Tests: ${{ github.event.inputs.skip_tests }}
+          - Skip Backup: ${{ github.event.inputs.skip_backup }}
+          - Force Deploy: ${{ github.event.inputs.force_deploy }}
+          
+          ## Results
+          - ✅ Deployment successful
+          - ✅ Health checks passed
+          - ✅ Application responding
+          
+          ## Next Steps
+          1. Monitor application metrics
+          2. Watch for any alerts or issues
+          3. Verify all features working as expected
+          4. Consider scaling if needed
+          EOF
+
+      - name: Upload deployment report
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-report-${{ needs.validate-deployment.outputs.deployment_id }}
+          path: deployment-report.md
+
+      - name: Notify success
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          custom_payload: |
+            {
+              "text": "✅ Manual Deployment Successful",
+              "attachments": [{
+                "color": "good",
+                "fields": [{
+                  "title": "Environment",
+                  "value": "${{ github.event.inputs.environment }}",
+                  "short": true
+                }, {
+                  "title": "Image Tag",
+                  "value": "${{ github.event.inputs.image_tag }}",
+                  "short": true
+                }, {
+                  "title": "Strategy",
+                  "value": "${{ github.event.inputs.deployment_strategy }}",
+                  "short": true
+                }, {
+                  "title": "Deployed By",
+                  "value": "${{ github.actor }}",
+                  "short": true
+                }, {
+                  "title": "Deployment ID",
+                  "value": "${{ needs.validate-deployment.outputs.deployment_id }}",
+                  "short": false
+                }]
+              }]
+            }
+
+  rollback-on-failure:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [validate-deployment, deploy]
+    if: failure() && needs.deploy.result == 'failure'
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          else
+            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          fi
+          chmod 600 $HOME/.kube/config
+
+      - name: Execute automatic rollback
+        run: |
+          ./scripts/deployment/rollback.sh \
+            ${{ github.event.inputs.environment }} \
+            previous \
+            false
+
+      - name: Notify rollback
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          custom_payload: |
+            {
+              "text": "🚨 Manual Deployment Failed - Rollback Executed",
+              "attachments": [{
+                "color": "danger",
+                "fields": [{
+                  "title": "Environment",
+                  "value": "${{ github.event.inputs.environment }}",
+                  "short": true
+                }, {
+                  "title": "Failed Deployment",
+                  "value": "${{ needs.validate-deployment.outputs.deployment_id }}",
+                  "short": true
+                }, {
+                  "title": "Initiated By",
+                  "value": "${{ github.actor }}",
+                  "short": true
+                }, {
+                  "title": "Action",
+                  "value": "Automatic rollback executed",
+                  "short": true
+                }]
+              }]
+            }

@@ -1,0 +1,332 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lanka-platform-api
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: api
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "4000"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lanka-platform-client
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: client
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: client
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lanka-platform-worker
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: worker
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "4001"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4001
+      targetPort: 4001
+      protocol: TCP
+      name: metrics
+  selector:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: worker
+---
+# Headless service for StatefulSets or direct pod communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: lanka-platform-api-headless
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: api-headless
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 4000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: api
+---
+# External service for Neo4j (running on EC2)
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: neo4j
+    app.kubernetes.io/component: database
+spec:
+  type: ExternalName
+  externalName: neo4j.lanka-internal.com
+  ports:
+    - port: 7687
+      targetPort: 7687
+      protocol: TCP
+      name: bolt
+    - port: 7474
+      targetPort: 7474
+      protocol: TCP
+      name: http
+    - port: 7473
+      targetPort: 7473
+      protocol: TCP
+      name: https
+---
+# External service for Redis (ElastiCache)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+spec:
+  type: ExternalName
+  externalName: redis.lanka-internal.com
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: redis
+---
+# Load Balancer Service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: lanka-platform-lb
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: loadbalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "HTTP"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/health"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "30"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: "6"
+    service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-unhealthy-threshold: "3"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+    - port: 443
+      targetPort: 80
+      protocol: TCP
+      name: https
+  selector:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: client
+---
+# Service Monitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: lanka-platform-monitor
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lanka-platform
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+# Ingress for HTTP/HTTPS traffic routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lanka-platform-ingress
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: ingress
+  annotations:
+    # AWS Load Balancer Controller annotations
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT:certificate/CERT_ID
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+    
+    # CORS configuration
+    alb.ingress.kubernetes.io/actions.ssl-redirect: |
+      {
+        "Type": "redirect",
+        "RedirectConfig": {
+          "Protocol": "HTTPS",
+          "Port": "443",
+          "StatusCode": "HTTP_301"
+        }
+      }
+    
+    # Rate limiting
+    alb.ingress.kubernetes.io/target-group-attributes: |
+      stickiness.enabled=false,
+      stickiness.lb_cookie.duration_seconds=86400,
+      load_balancing.algorithm.type=least_outstanding_requests
+spec:
+  tls:
+    - hosts:
+        - api.lanka-platform.com
+        - app.lanka-platform.com
+      secretName: lanka-platform-tls
+  rules:
+    # API traffic
+    - host: api.lanka-platform.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lanka-platform-api
+                port:
+                  number: 80
+    # Client application traffic
+    - host: app.lanka-platform.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lanka-platform-client
+                port:
+                  number: 80
+          # API proxy for client
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: lanka-platform-api
+                port:
+                  number: 80
+---
+# Network Policy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lanka-platform-network-policy
+  namespace: lanka-platform
+  labels:
+    app.kubernetes.io/name: lanka-platform
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lanka-platform
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-system
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 80
+    # Allow traffic from monitoring namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 4001
+    # Allow inter-pod communication within namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: lanka-platform
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow HTTPS outbound (for external APIs)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    # Allow database connections
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 7687  # Neo4j Bolt
+        - protocol: TCP
+          port: 7474  # Neo4j HTTP
+        - protocol: TCP
+          port: 6379  # Redis

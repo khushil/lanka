@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requirementsResolvers = void 0;
 const nlp_service_1 = require("../services/nlp.service");
+const secure_query_builder_1 = require("../../../utils/secure-query-builder");
+const logger_1 = require("../../../core/logging/logger");
 exports.requirementsResolvers = {
     Query: {
         requirement: async (_, { id }, context) => {
@@ -66,38 +68,63 @@ exports.requirementsResolvers = {
             return context.services.requirements.createRequirement(input);
         },
         updateRequirement: async (_, { id, input }, context) => {
-            // Simplified update - would be more comprehensive in production
-            const setClause = Object.keys(input)
-                .map(key => `r.${key} = $${key}`)
-                .join(', ');
-            const query = `
-        MATCH (r:Requirement {id: $id})
-        SET ${setClause}, r.updatedAt = $updatedAt
-        RETURN r
-      `;
-            const params = {
-                id,
-                ...input,
-                updatedAt: new Date().toISOString(),
-            };
-            const results = await context.services.neo4j.executeQuery(query, params);
-            return results[0]?.r.properties;
+            try {
+                // Validate input parameters
+                secure_query_builder_1.InputValidator.validateGraphQLInput(input, {
+                    title: { type: 'string', maxLength: 255 },
+                    description: { type: 'string', maxLength: 2000 },
+                    type: { type: 'string', maxLength: 50 },
+                    status: { type: 'string', maxLength: 20 },
+                    priority: { type: 'string', maxLength: 20 }
+                });
+                // Use secure query builder to prevent injection
+                const { query, params } = secure_query_builder_1.SecureQueryBuilder.buildSecureUpdateQuery('Requirement', id, input);
+                const results = await context.services.neo4j.executeQuery(query, params);
+                if (results.length === 0) {
+                    throw new Error(`Requirement with id ${id} not found`);
+                }
+                logger_1.logger.info('Requirement updated successfully', { id, fieldCount: Object.keys(input).length });
+                return results[0]?.n.properties;
+            }
+            catch (error) {
+                logger_1.logger.error('Failed to update requirement', { id, input, error });
+                throw error;
+            }
         },
         approveRequirement: async (_, { id }, context) => {
             return context.services.requirements.updateRequirementStatus(id, 'APPROVED');
         },
-        linkRequirements: async (_, { requirement1Id, requirement2Id, relationship, }, context) => {
-            const query = `
-        MATCH (r1:Requirement {id: $requirement1Id})
-        MATCH (r2:Requirement {id: $requirement2Id})
-        CREATE (r1)-[:${relationship}]->(r2)
-        RETURN r1, r2
-      `;
-            const results = await context.services.neo4j.executeQuery(query, {
-                requirement1Id,
-                requirement2Id,
-            });
-            return results.length > 0;
+        linkRequirements: async (_, { requirement1Id, requirement2Id, relationship, properties = {}, }, context) => {
+            try {
+                // Validate input parameters
+                if (!requirement1Id || !requirement2Id) {
+                    throw new Error('Both requirement IDs are required');
+                }
+                if (requirement1Id === requirement2Id) {
+                    throw new Error('Cannot link requirement to itself');
+                }
+                // Use secure query builder with relationship type validation
+                const { query, params } = secure_query_builder_1.SecureQueryBuilder.buildSecureRelationshipQuery('Requirement', requirement1Id, 'Requirement', requirement2Id, relationship, properties);
+                const results = await context.services.neo4j.executeQuery(query, params);
+                if (results.length === 0) {
+                    throw new Error('Failed to create relationship - one or both requirements not found');
+                }
+                logger_1.logger.info('Requirements linked successfully', {
+                    requirement1Id,
+                    requirement2Id,
+                    relationship
+                });
+                return true;
+            }
+            catch (error) {
+                logger_1.logger.error('Failed to link requirements', {
+                    requirement1Id,
+                    requirement2Id,
+                    relationship,
+                    error
+                });
+                throw error;
+            }
         },
         resolveConflict: async (_, { conflictId, resolution }, context) => {
             // Simplified conflict resolution

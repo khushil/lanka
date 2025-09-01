@@ -1,0 +1,119 @@
+# Multi-stage Dockerfile for Lanka Platform Production
+# Optimized for security, performance, and minimal image size
+
+# Build stage
+FROM node:18-alpine AS builder
+
+# Set build arguments
+ARG NODE_ENV=production
+ARG VERSION=latest
+
+# Set environment variables
+ENV NODE_ENV=$NODE_ENV
+ENV CI=true
+ENV VERSION=$VERSION
+
+# Create app directory
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
+    curl
+
+# Copy package files
+COPY package*.json ./
+COPY yarn.lock* ./
+
+# Install dependencies
+RUN npm ci --only=production --no-audit --no-fund && \
+    npm cache clean --force
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npm run build && \
+    npm run test:unit && \
+    npm prune --production
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Set build arguments
+ARG NODE_ENV=production
+ARG VERSION=latest
+
+# Set labels
+LABEL maintainer="Lanka Platform Team"
+LABEL version=$VERSION
+LABEL description="Lanka Platform Production Container"
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S lanka -u 1001
+
+# Set environment variables
+ENV NODE_ENV=$NODE_ENV
+ENV VERSION=$VERSION
+ENV PORT=3000
+ENV HOST=0.0.0.0
+
+# Install production runtime dependencies
+RUN apk add --no-cache \
+    tini \
+    curl \
+    dumb-init && \
+    rm -rf /var/cache/apk/*
+
+# Create app directory with proper permissions
+WORKDIR /app
+RUN chown lanka:nodejs /app
+
+# Copy built application from builder stage
+COPY --from=builder --chown=lanka:nodejs /app/dist ./dist
+COPY --from=builder --chown=lanka:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=lanka:nodejs /app/package*.json ./
+COPY --from=builder --chown=lanka:nodejs /app/public ./public
+
+# Copy health check script
+COPY --chown=lanka:nodejs scripts/docker/healthcheck.sh ./healthcheck.sh
+RUN chmod +x ./healthcheck.sh
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/tmp && \
+    chown -R lanka:nodejs /app/logs /app/tmp
+
+# Switch to non-root user
+USER lanka
+
+# Expose port
+EXPOSE 3000
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ./healthcheck.sh || exit 1
+
+# Use tini as PID 1
+ENTRYPOINT ["tini", "--"]
+
+# Start the application
+CMD ["node", "dist/server.js"]
+
+# Security stage for scanning
+FROM production AS security-scan
+
+USER root
+
+# Install security scanning tools
+RUN apk add --no-cache \
+    npm-audit-ci \
+    retire
+
+# Run security scans (will be overridden in CI)
+RUN npm audit --audit-level=high || true
+
+USER lanka

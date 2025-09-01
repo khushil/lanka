@@ -23,25 +23,23 @@ module.exports = {
   projects: [
     {
       displayName: 'unit',
-      testMatch: ['<rootDir>/tests/unit/**/*.test.ts'],
-      testTimeout: 5000,
+      testMatch: ['<rootDir>/tests/unit/**/*.test.ts']
     },
     {
       displayName: 'integration',
-      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
-      testTimeout: 15000,
-      globalSetup: '<rootDir>/tests/integration/setup.ts',
-      globalTeardown: '<rootDir>/tests/integration/teardown.ts',
+      testMatch: ['<rootDir>/tests/integration/**/*.test.ts']
     },
     {
-      displayName: 'performance',
-      testMatch: ['<rootDir>/tests/performance/**/*.test.ts'],
-      testTimeout: 30000,
+      displayName: 'performance', 
+      testMatch: ['<rootDir>/tests/performance/**/*.test.ts']
+    },
+    {
+      displayName: 'security',
+      testMatch: ['<rootDir>/tests/security/**/*.test.ts']
     },
     {
       displayName: 'bdd',
-      testMatch: ['<rootDir>/tests/bdd/**/*.test.ts'],
-      testTimeout: 20000,
+      testMatch: ['<rootDir>/tests/bdd/**/*.test.ts']
     }
   ]
 };

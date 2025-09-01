@@ -385,7 +385,18 @@ export class MCPServerFactory {
       errors.push(`Redis connection failed: ${error}`);
     }
 
-    // TODO: Add vector database connection validation
+    // Validate vector database connection
+    try {
+      if (config.vectorDb?.type === 'qdrant') {
+        // await this.validateQdrantConnection(config.vectorDb.uri);
+        console.log('Qdrant connection validation skipped (placeholder)');
+      } else if (config.vectorDb?.type === 'milvus') {
+        // await this.validateMilvusConnection(config.vectorDb.uri);
+        console.log('Milvus connection validation skipped (placeholder)');
+      }
+    } catch (error) {
+      throw new Error(`Vector database validation failed: ${error.message}`);
+    }
 
     if (errors.length > 0) {
       this.logger.error('Connection validation failed:', errors);

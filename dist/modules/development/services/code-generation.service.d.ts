@@ -1,11 +1,15 @@
 import { Neo4jService } from '../../../core/database/neo4j';
 import { CodeGenerationRequest, CodeGenerationResult, ProgrammingLanguage, ValidationLevel, ValidationResult, AIModelConfig, CodebaseInfo, GenerationHistory, BatchGenerationRequest, BatchGenerationResult } from '../types/code-generation.types';
+/**
+ * Refactored CodeGenerationService - Core orchestration logic only
+ * Template, validation, and AI integration logic extracted to separate services
+ * Now maintains single responsibility principle with < 300 lines
+ */
 export declare class CodeGenerationService {
     private neo4j;
-    private aiService;
-    private templateEngine;
-    private codeValidator;
-    private aiModelConfig?;
+    private templateService;
+    private validationService;
+    private aiIntegrationService;
     constructor(neo4j: Neo4jService);
     /**
      * Generate code from requirements and architecture decisions
@@ -45,37 +49,16 @@ export declare class CodeGenerationService {
     generateBatch(batchRequest: BatchGenerationRequest): Promise<BatchGenerationResult>;
     private getRequirements;
     private getArchitectureDecisions;
-    private generateFromTemplate;
-    private generateWithAI;
-    private generateHybrid;
     private generateFromPatterns;
-    private validateGeneratedCode;
-    private combineValidationResults;
-    private generateSuggestions;
     private storeGenerationResult;
     private logGenerationHistory;
     private countLinesOfCode;
-    private average;
-    private mapIssueTypeToSuggestionType;
-    private mapSeverityToImpact;
     private createEmptyCodebaseInfo;
     private buildDirectoryStructure;
     private calculateCodebaseMetrics;
-    private prepareTemplateData;
-    private generateFilePath;
-    private getFileExtension;
-    private getBaseFileName;
-    private calculateChecksum;
-    private extractDependencies;
-    private extractImports;
-    private extractExports;
-    private extractFunctions;
-    private extractClasses;
-    private extractInterfaces;
-    private processAIResponse;
     private findMatchingPatterns;
-    private generateFromDetectedPatterns;
     private waitForSlot;
     private createFailedResult;
+    private average;
 }
 //# sourceMappingURL=code-generation.service.d.ts.map

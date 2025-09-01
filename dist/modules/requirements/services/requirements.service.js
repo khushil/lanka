@@ -6,6 +6,7 @@ const logger_1 = require("../../../core/logging/logger");
 const requirement_types_1 = require("../types/requirement.types");
 const nlp_service_1 = require("./nlp.service");
 const similarity_service_1 = require("./similarity.service");
+const secure_query_builder_1 = require("../../../utils/secure-query-builder");
 class RequirementsService {
     neo4j;
     nlpService;
@@ -70,18 +71,24 @@ class RequirementsService {
         }
     }
     async findSimilarRequirements(requirementId) {
+        // Use parameterized query to prevent injection
         const query = `
       MATCH (r:Requirement {id: $requirementId})
       MATCH (other:Requirement)
-      WHERE other.id <> r.id
+      WHERE other.id <> r.id AND other.embedding IS NOT NULL AND r.embedding IS NOT NULL
       WITH r, other, 
            gds.similarity.cosine(r.embedding, other.embedding) AS similarity
-      WHERE similarity > 0.7
+      WHERE similarity > $threshold
       RETURN other, similarity
       ORDER BY similarity DESC
-      LIMIT 10
+      LIMIT $limit
     `;
-        const results = await this.neo4j.executeQuery(query, { requirementId });
+        const params = {
+            requirementId: secure_query_builder_1.SecureQueryBuilder.validateAndSanitizeInput(requirementId),
+            threshold: 0.7,
+            limit: 10
+        };
+        const results = await this.neo4j.executeQuery(query, params);
         return results;
     }
     async detectConflicts(requirementId) {

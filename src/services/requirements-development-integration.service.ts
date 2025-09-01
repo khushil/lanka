@@ -1,6 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RequirementService } from '../modules/requirements/services/requirement.service';
 import { AnalysisService } from '../modules/requirements/services/analysis.service';
+import {
+  ErrorWrapper,
+  ErrorCode,
+  notFoundError,
+  technicalError,
+  businessError,
+  withErrorHandling,
+  createNotFoundError,
+  createDatabaseError
+} from '../core/errors';
 
 /**
  * Service for integrating Requirements Intelligence with Development Intelligence
@@ -19,38 +29,67 @@ export class RequirementsDevelopmentIntegrationService {
    * Convert requirements to development specifications
    */
   async convertRequirementsToDevelopmentSpecs(requirementId: string): Promise<DevelopmentSpec> {
-    try {
-      const requirement = await this.requirementService.getRequirement(requirementId);
-      if (!requirement) {
-        throw new Error(`Requirement ${requirementId} not found`);
-      }
+    return withErrorHandling(
+      async () => {
+        // Validate input
+        if (!requirementId || requirementId.trim().length === 0) {
+          throw ErrorWrapper.validation(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            'Requirement ID is required',
+            { fieldErrors: { requirementId: ['Requirement ID cannot be empty'] } }
+          );
+        }
 
-      const analysis = await this.analysisService.analyzeRequirement(requirementId);
-      
-      return {
-        id: `dev-spec-${requirementId}`,
-        requirementId,
-        title: requirement.title,
-        description: requirement.description,
-        functionalSpecs: this.extractFunctionalSpecs(requirement, analysis),
-        technicalSpecs: this.extractTechnicalSpecs(requirement, analysis),
-        testCriteria: this.generateTestCriteria(requirement, analysis),
-        acceptanceCriteria: requirement.acceptanceCriteria || [],
-        constraints: this.extractConstraints(requirement, analysis),
-        dependencies: requirement.dependencies || [],
-        priority: requirement.priority,
-        complexity: analysis?.complexity || 'medium',
-        estimatedEffort: this.estimateEffort(requirement, analysis),
-        codePatterns: this.suggestCodePatterns(requirement, analysis),
-        validationRules: this.generateValidationRules(requirement, analysis),
-      };
-    } catch (error) {
-      this.logger.error(`Failed to convert requirement ${requirementId} to development spec`, error);
-      throw new RequirementsDevelopmentIntegrationError(
-        `Failed to convert requirement to development spec: ${error.message}`,
-        error
-      );
-    }
+        this.logger.debug(`Converting requirement ${requirementId} to development spec`);
+
+        // Get requirement with proper error handling
+        const requirement = await this.requirementService.getRequirement(requirementId)
+          .catch(error => {
+            throw createDatabaseError('get_requirement', error);
+          });
+
+        if (!requirement) {
+          throw createNotFoundError('Requirement', requirementId);
+        }
+
+        // Get analysis with proper error handling
+        const analysis = await this.analysisService.analyzeRequirement(requirementId)
+          .catch(error => {
+            this.logger.warn(`Analysis failed for requirement ${requirementId}, proceeding with basic conversion`, error);
+            return null; // Allow conversion to proceed without analysis
+          });
+
+        const developmentSpec = {
+          id: `dev-spec-${requirementId}`,
+          requirementId,
+          title: requirement.title,
+          description: requirement.description,
+          functionalSpecs: this.extractFunctionalSpecs(requirement, analysis),
+          technicalSpecs: this.extractTechnicalSpecs(requirement, analysis),
+          testCriteria: this.generateTestCriteria(requirement, analysis),
+          acceptanceCriteria: requirement.acceptanceCriteria || [],
+          constraints: this.extractConstraints(requirement, analysis),
+          dependencies: requirement.dependencies || [],
+          priority: requirement.priority,
+          complexity: analysis?.complexity || 'medium',
+          estimatedEffort: this.estimateEffort(requirement, analysis),
+          codePatterns: this.suggestCodePatterns(requirement, analysis),
+          validationRules: this.generateValidationRules(requirement, analysis),
+        };
+
+        this.logger.info(`Successfully converted requirement ${requirementId} to development spec`, {
+          specId: developmentSpec.id,
+          complexity: developmentSpec.complexity,
+          functionalSpecsCount: developmentSpec.functionalSpecs.length
+        });
+
+        return developmentSpec;
+      },
+      {
+        operation: 'convert_requirement_to_dev_spec',
+        metadata: { requirementId }
+      }
+    )();
   }
 
   /**
@@ -409,7 +448,8 @@ export class {{EntityName}}Controller {
   @ApiOperation({ summary: '{{summary}}' })
   @ApiResponse({ status: {{successCode}}, description: '{{successDescription}}' })
   async {{operationName}}({{parameters}}): Promise<{{returnType}}> {
-    // TODO: Implement {{operationName}}
+    throw new Error(`Operation ${operationName} not yet implemented`);
+    // Implementation needed based on API specification
     return this.{{entityName}}Service.{{operationName}}({{parameterNames}});
   }
   {{/operations}}
@@ -430,7 +470,8 @@ export class {{EntityName}}Service {
   async {{methodName}}({{parameters}}): Promise<{{returnType}}> {
     try {
       this.logger.debug('{{methodDescription}}');
-      // TODO: Implement {{methodName}}
+      throw new Error(`Method ${methodName} not yet implemented`);
+      // Implementation needed based on requirements
       {{#businessRules}}
       // Business Rule: {{rule}}
       {{/businessRules}}

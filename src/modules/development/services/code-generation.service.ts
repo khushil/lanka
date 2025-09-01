@@ -20,20 +20,24 @@ import {
   BatchGenerationResult,
   CodeSuggestion,
 } from '../types/code-generation.types';
-import { AIService } from './ai.service';
-import { TemplateEngineService } from './template-engine.service';
-import { CodeValidatorService } from './code-validator.service';
+import { TemplateService } from './code-generation/template.service';
+import { ValidationService } from './code-generation/validation.service';
+import { AIIntegrationService } from './code-generation/ai-integration.service';
 
+/**
+ * Refactored CodeGenerationService - Core orchestration logic only
+ * Template, validation, and AI integration logic extracted to separate services
+ * Now maintains single responsibility principle with < 300 lines
+ */
 export class CodeGenerationService {
-  private aiService: AIService;
-  private templateEngine: TemplateEngineService;
-  private codeValidator: CodeValidatorService;
-  private aiModelConfig?: AIModelConfig;
+  private templateService: TemplateService;
+  private validationService: ValidationService;
+  private aiIntegrationService: AIIntegrationService;
 
   constructor(private neo4j: Neo4jService) {
-    this.aiService = new AIService();
-    this.templateEngine = new TemplateEngineService();
-    this.codeValidator = new CodeValidatorService();
+    this.templateService = new TemplateService();
+    this.validationService = new ValidationService();
+    this.aiIntegrationService = new AIIntegrationService();
   }
 
   /**
@@ -62,13 +66,14 @@ export class CodeGenerationService {
 
       switch (request.strategy) {
         case GenerationStrategy.TEMPLATE_BASED:
-          ({ files: generatedFiles, metadata } = await this.generateFromTemplate(request, requirements, architecture));
+          ({ files: generatedFiles, metadata } = await this.templateService.generateFromTemplate(request, requirements, architecture));
           break;
         case GenerationStrategy.AI_ASSISTED:
-          ({ files: generatedFiles, metadata } = await this.generateWithAI(request, requirements, architecture));
+          ({ files: generatedFiles, metadata } = await this.aiIntegrationService.generateWithAI(request, requirements, architecture));
           break;
         case GenerationStrategy.HYBRID:
-          ({ files: generatedFiles, metadata } = await this.generateHybrid(request, requirements, architecture));
+          const templateResult = await this.templateService.generateFromTemplate(request, requirements, architecture);
+          ({ files: generatedFiles, metadata } = await this.aiIntegrationService.generateHybrid(request, requirements, architecture, templateResult.files[0].content));
           break;
         case GenerationStrategy.PATTERN_MATCHING:
           ({ files: generatedFiles, metadata } = await this.generateFromPatterns(request, requirements, architecture));
@@ -78,10 +83,10 @@ export class CodeGenerationService {
       }
 
       // Validate generated code
-      const validation = await this.validateGeneratedCode(generatedFiles, request.validationLevel);
+      const validation = await this.validationService.validateGeneratedFiles(generatedFiles, request.validationLevel);
 
       // Create suggestions
-      const suggestions = await this.generateSuggestions(generatedFiles, validation);
+      const suggestions = await this.aiIntegrationService.generateSuggestions(generatedFiles);
 
       const endTime = Date.now();
       const processingTime = endTime - startTime;
@@ -151,55 +156,7 @@ export class CodeGenerationService {
     language: ProgrammingLanguage, 
     level: ValidationLevel
   ): Promise<ValidationResult> {
-    try {
-      logger.info('Validating code', { language, level });
-
-      const validations: ValidationResult[] = [];
-
-      // Always validate syntax first
-      const syntaxValidation = await this.codeValidator.validateSyntax(code, language);
-      validations.push(syntaxValidation);
-
-      // Return early if syntax is invalid
-      if (!syntaxValidation.isValid) {
-        return syntaxValidation;
-      }
-
-      // Perform additional validations based on level
-      switch (level) {
-        case ValidationLevel.FULL:
-          const [qualityValidation, securityValidation, performanceValidation] = await Promise.all([
-            this.codeValidator.validateQuality(code, language),
-            this.codeValidator.validateSecurity(code, language),
-            this.codeValidator.validatePerformance(code, language),
-          ]);
-          validations.push(qualityValidation, securityValidation, performanceValidation);
-          break;
-        case ValidationLevel.QUALITY:
-          const qualityResult = await this.codeValidator.validateQuality(code, language);
-          validations.push(qualityResult);
-          break;
-        case ValidationLevel.SECURITY:
-          const securityResult = await this.codeValidator.validateSecurity(code, language);
-          validations.push(securityResult);
-          break;
-        case ValidationLevel.PERFORMANCE:
-          const performanceResult = await this.codeValidator.validatePerformance(code, language);
-          validations.push(performanceResult);
-          break;
-        case ValidationLevel.SEMANTIC:
-          // For semantic validation, we use quality validation as it includes semantic checks
-          const semanticResult = await this.codeValidator.validateQuality(code, language);
-          validations.push(semanticResult);
-          break;
-      }
-
-      // Combine validation results
-      return this.combineValidationResults(validations, level);
-    } catch (error) {
-      logger.error('Code validation failed', { error });
-      throw error;
-    }
+    return this.validationService.validateCode(code, language, level);
   }
 
   /**
@@ -269,55 +226,21 @@ export class CodeGenerationService {
     language: ProgrammingLanguage, 
     framework: string
   ): Promise<{ content: string; framework: string; coverage: number }> {
-    try {
-      logger.info('Generating tests', { language, framework });
-
-      const aiResponse = await this.aiService.generateCode({
-        type: 'test-generation',
-        sourceCode: codeContent,
-        language,
-        testFramework: framework,
-        includeSetup: true,
-        includeTeardown: true,
-        generateMocks: true,
-      });
-
-      return {
-        content: aiResponse.code || '',
-        framework,
-        coverage: aiResponse.metadata?.estimatedCoverage || 0.8,
-      };
-    } catch (error) {
-      logger.error('Test generation failed', { error });
-      throw error;
-    }
+    return this.aiIntegrationService.generateTests(codeContent, language, framework);
   }
 
   /**
    * Configure AI model settings
    */
   async configurateAIModel(config: AIModelConfig): Promise<void> {
-    try {
-      logger.info('Configuring AI model', { 
-        provider: config.provider, 
-        model: config.model 
-      });
-
-      this.aiModelConfig = config;
-      await this.aiService.configure(config);
-
-      logger.info('AI model configured successfully');
-    } catch (error) {
-      logger.error('AI model configuration failed', { error });
-      throw error;
-    }
+    await this.aiIntegrationService.configure(config);
   }
 
   /**
    * Get current AI model configuration
    */
   getAIModelConfig(): AIModelConfig | undefined {
-    return this.aiModelConfig;
+    return this.aiIntegrationService.getConfig();
   }
 
   /**
@@ -463,108 +386,6 @@ export class CodeGenerationService {
     return this.neo4j.executeQuery(query, { architectureIds });
   }
 
-  private async generateFromTemplate(
-    request: CodeGenerationRequest, 
-    requirements: any[], 
-    _architecture: any[]
-  ): Promise<{ files: GeneratedFile[]; metadata: any }> {
-    logger.info('Generating code from template', { templateType: request.templateType });
-
-    const template = await this.templateEngine.loadTemplate({
-      type: request.templateType,
-      language: request.language,
-      framework: request.context.framework,
-    });
-
-    const templateData = this.prepareTemplateData(request, requirements, _architecture);
-    const renderedCode = await this.templateEngine.renderTemplate(template, templateData);
-
-    const generatedFile: GeneratedFile = {
-      path: this.generateFilePath(request),
-      content: renderedCode,
-      language: request.language,
-      type: request.templateType,
-      size: renderedCode.length,
-      checksum: this.calculateChecksum(renderedCode),
-      dependencies: this.extractDependencies(renderedCode),
-      imports: this.extractImports(renderedCode, request.language),
-      exports: this.extractExports(renderedCode, request.language),
-      functions: this.extractFunctions(renderedCode, request.language),
-      classes: this.extractClasses(renderedCode, request.language),
-      interfaces: this.extractInterfaces(renderedCode, request.language),
-    };
-
-    return {
-      files: [generatedFile],
-      metadata: {
-        template: template.name,
-        templateVersion: template.metadata.version,
-      },
-    };
-  }
-
-  private async generateWithAI(
-    request: CodeGenerationRequest, 
-    requirements: any[], 
-    architecture: any[]
-  ): Promise<{ files: GeneratedFile[]; metadata: any }> {
-    logger.info('Generating code with AI assistance');
-
-    const aiResponse = await this.aiService.generateCode({
-      requirements,
-      architecture,
-      language: request.language,
-      templateType: request.templateType,
-      context: request.context,
-      customPrompts: request.customPrompts,
-    });
-
-    const files = this.processAIResponse(aiResponse, request);
-
-    return {
-      files,
-      metadata: {
-        aiModel: aiResponse.metadata?.aiModel,
-        confidence: aiResponse.confidence,
-        tokenUsage: aiResponse.metadata?.tokenUsage,
-      },
-    };
-  }
-
-  private async generateHybrid(
-    request: CodeGenerationRequest, 
-    requirements: any[], 
-    architecture: any[]
-  ): Promise<{ files: GeneratedFile[]; metadata: any }> {
-    logger.info('Generating code with hybrid strategy');
-
-    // First, generate base code from template
-    const templateResult = await this.generateFromTemplate(request, requirements, architecture);
-    
-    // Then, enhance with AI
-    const enhancedResponse = await this.aiService.generateCode({
-      baseCode: templateResult.files[0].content,
-      requirements,
-      architecture,
-      language: request.language,
-      enhancementType: 'refine',
-      context: request.context,
-    });
-
-    const enhancedFiles = this.processAIResponse(enhancedResponse, request);
-
-    return {
-      files: enhancedFiles,
-      metadata: {
-        ...templateResult.metadata,
-        aiModel: enhancedResponse.metadata?.aiModel,
-        confidence: enhancedResponse.confidence,
-        tokenUsage: enhancedResponse.metadata?.tokenUsage,
-        hybridStrategy: true,
-      },
-    };
-  }
-
   private async generateFromPatterns(
     request: CodeGenerationRequest, 
     requirements: any[], 
@@ -576,8 +397,8 @@ export class CodeGenerationService {
     const codebaseInfo = await this.analyzeCodebase(request.context.projectId);
     const matchingPatterns = this.findMatchingPatterns(codebaseInfo.patterns, requirements);
 
-    // Generate code based on patterns
-    const patternBasedCode = await this.generateFromDetectedPatterns(matchingPatterns, request);
+    // Generate code based on patterns using AI integration
+    const patternBasedCode = await this.aiIntegrationService.generateFromPatterns(matchingPatterns, request);
 
     return {
       files: patternBasedCode,
@@ -586,76 +407,6 @@ export class CodeGenerationService {
         patternConfidence: matchingPatterns.reduce((avg, p) => avg + p.confidence, 0) / matchingPatterns.length,
       },
     };
-  }
-
-  private async validateGeneratedCode(files: GeneratedFile[], level: ValidationLevel): Promise<ValidationResult> {
-    const allValidations: ValidationResult[] = [];
-
-    for (const file of files) {
-      const validation = await this.validateCode(file.content, file.language, level);
-      allValidations.push(validation);
-    }
-
-    return this.combineValidationResults(allValidations, level);
-  }
-
-  private combineValidationResults(validations: ValidationResult[], level: ValidationLevel): ValidationResult {
-    const allIssues: ValidationIssue[] = validations.flatMap(v => v.issues);
-    const isValid = validations.every(v => v.isValid);
-    const averageScore = validations.reduce((sum, v) => sum + v.score, 0) / validations.length;
-    
-    const combinedMetrics: QualityMetrics = {
-      complexity: this.average(validations.map(v => v.metrics.complexity)),
-      maintainability: this.average(validations.map(v => v.metrics.maintainability)),
-      reliability: this.average(validations.map(v => v.metrics.reliability)),
-      security: this.average(validations.map(v => v.metrics.security)),
-      performance: this.average(validations.map(v => v.metrics.performance)),
-      testability: this.average(validations.map(v => v.metrics.testability)),
-      readability: this.average(validations.map(v => v.metrics.readability)),
-      reusability: this.average(validations.map(v => v.metrics.reusability)),
-      overall: averageScore,
-    };
-
-    return {
-      level,
-      isValid,
-      score: averageScore,
-      issues: allIssues,
-      metrics: combinedMetrics,
-      suggestions: [...new Set(validations.flatMap(v => v.suggestions))],
-      validatedAt: new Date().toISOString(),
-    };
-  }
-
-  private async generateSuggestions(files: GeneratedFile[], validation: ValidationResult): Promise<CodeSuggestion[]> {
-    const suggestions: CodeSuggestion[] = [];
-
-    // Generate suggestions based on validation issues
-    for (const issue of validation.issues) {
-      if (issue.suggestion) {
-        suggestions.push({
-          id: uuidv4(),
-          type: this.mapIssueTypeToSuggestionType(issue.type),
-          title: `Fix ${issue.type.toLowerCase()} issue`,
-          description: issue.suggestion,
-          impact: this.mapSeverityToImpact(issue.severity),
-          effort: issue.fixable ? 'LOW' : 'MEDIUM',
-          benefits: [issue.message],
-        });
-      }
-    }
-
-    // Generate improvement suggestions using AI
-    for (const file of files) {
-      try {
-        const aiSuggestions = await this.aiService.suggestImprovements(file.content, file.language);
-        suggestions.push(...aiSuggestions);
-      } catch (error) {
-        logger.warn('Failed to generate AI suggestions', { file: file.path, error });
-      }
-    }
-
-    return suggestions;
   }
 
   private async storeGenerationResult(result: CodeGenerationResult): Promise<void> {
@@ -740,29 +491,6 @@ export class CodeGenerationService {
     return files.reduce((total, file) => total + file.content.split('\n').length, 0);
   }
 
-  private average(values: (number | undefined)[]): number {
-    const validValues = values.filter((v): v is number => v !== undefined);
-    return validValues.length > 0 ? validValues.reduce((sum, v) => sum + v, 0) / validValues.length : 0;
-  }
-
-  private mapIssueTypeToSuggestionType(issueType: string): 'OPTIMIZATION' | 'REFACTOR' | 'BEST_PRACTICE' | 'SECURITY' | 'PERFORMANCE' {
-    switch (issueType.toUpperCase()) {
-      case 'SECURITY': return 'SECURITY';
-      case 'PERFORMANCE': return 'PERFORMANCE';
-      case 'QUALITY': return 'BEST_PRACTICE';
-      default: return 'OPTIMIZATION';
-    }
-  }
-
-  private mapSeverityToImpact(severity: string): 'HIGH' | 'MEDIUM' | 'LOW' {
-    switch (severity.toUpperCase()) {
-      case 'ERROR': return 'HIGH';
-      case 'WARNING': return 'MEDIUM';
-      case 'INFO': return 'LOW';
-      default: return 'MEDIUM';
-    }
-  }
-
   private createEmptyCodebaseInfo(): CodebaseInfo {
     return {
       structure: { path: '/', type: 'DIRECTORY', children: [] },
@@ -804,211 +532,9 @@ export class CodeGenerationService {
     };
   }
 
-  private prepareTemplateData(request: CodeGenerationRequest, requirements: any[], architecture: any[]): any {
-    return {
-      requirements,
-      architecture,
-      context: request.context,
-      language: request.language,
-      templateType: request.templateType,
-    };
-  }
-
-  private generateFilePath(request: CodeGenerationRequest): string {
-    const extension = this.getFileExtension(request.language);
-    const baseName = this.getBaseFileName(request.templateType);
-    return `${request.outputPath || 'src'}/${baseName}.${extension}`;
-  }
-
-  private getFileExtension(language: ProgrammingLanguage): string {
-    switch (language) {
-      case ProgrammingLanguage.TYPESCRIPT: return 'ts';
-      case ProgrammingLanguage.JAVASCRIPT: return 'js';
-      case ProgrammingLanguage.PYTHON: return 'py';
-      case ProgrammingLanguage.JAVA: return 'java';
-      case ProgrammingLanguage.GO: return 'go';
-      case ProgrammingLanguage.RUST: return 'rs';
-      case ProgrammingLanguage.CSHARP: return 'cs';
-      case ProgrammingLanguage.PHP: return 'php';
-      case ProgrammingLanguage.RUBY: return 'rb';
-      case ProgrammingLanguage.KOTLIN: return 'kt';
-      case ProgrammingLanguage.SWIFT: return 'swift';
-      default: return 'txt';
-    }
-  }
-
-  private getBaseFileName(templateType: CodeTemplateType): string {
-    switch (templateType) {
-      case CodeTemplateType.SERVICE: return 'service';
-      case CodeTemplateType.CONTROLLER: return 'controller';
-      case CodeTemplateType.MODEL: return 'model';
-      case CodeTemplateType.COMPONENT: return 'component';
-      case CodeTemplateType.TEST: return 'test';
-      case CodeTemplateType.CONFIG: return 'config';
-      case CodeTemplateType.MIDDLEWARE: return 'middleware';
-      case CodeTemplateType.UTILITY: return 'util';
-      case CodeTemplateType.API_ENDPOINT: return 'api';
-      case CodeTemplateType.DATABASE_MIGRATION: return 'migration';
-      default: return 'generated';
-    }
-  }
-
-  private calculateChecksum(content: string): string {
-    // Simple hash implementation
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(16);
-  }
-
-  private extractDependencies(code: string): string[] {
-    // Extract dependencies from import statements
-    const importRegex = /import\s+.*?\s+from\s+['"`]([^'"`]+)['"`]/g;
-    const dependencies: string[] = [];
-    let match;
-    while ((match = importRegex.exec(code)) !== null) {
-      dependencies.push(match[1]);
-    }
-    return [...new Set(dependencies)];
-  }
-
-  private extractImports(code: string, language: ProgrammingLanguage): string[] {
-    // Language-specific import extraction
-    const importRegex = language === ProgrammingLanguage.PYTHON 
-      ? /import\s+([^\s\n]+)|from\s+([^\s\n]+)\s+import/g
-      : /import\s+.*?\s+from\s+['"`]([^'"`]+)['"`]|import\s+['"`]([^'"`]+)['"`]/g;
-    
-    const imports: string[] = [];
-    let match;
-    while ((match = importRegex.exec(code)) !== null) {
-      imports.push(match[1] || match[2]);
-    }
-    return [...new Set(imports)];
-  }
-
-  private extractExports(code: string, _language: ProgrammingLanguage): string[] {
-    // Language-specific export extraction
-    const exportRegex = /export\s+(?:default\s+)?(?:class|interface|function|const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)/g;
-    const exports: string[] = [];
-    let match;
-    while ((match = exportRegex.exec(code)) !== null) {
-      exports.push(match[1]);
-    }
-    return exports;
-  }
-
-  private extractFunctions(code: string, _language: ProgrammingLanguage): any[] {
-    // Simplified function extraction
-    const functionRegex = /function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
-    const functions: any[] = [];
-    let match;
-    while ((match = functionRegex.exec(code)) !== null) {
-      functions.push({
-        name: match[1],
-        parameters: [],
-        returnType: 'any',
-        visibility: 'PUBLIC',
-        isAsync: false,
-        complexity: 1,
-      });
-    }
-    return functions;
-  }
-
-  private extractClasses(code: string, _language: ProgrammingLanguage): any[] {
-    // Simplified class extraction
-    const classRegex = /class\s+([A-Za-z_$][A-Za-z0-9_$]*)/g;
-    const classes: any[] = [];
-    let match;
-    while ((match = classRegex.exec(code)) !== null) {
-      classes.push({
-        name: match[1],
-        extends: undefined,
-        implements: [],
-        properties: [],
-        methods: [],
-        visibility: 'PUBLIC',
-        isAbstract: false,
-      });
-    }
-    return classes;
-  }
-
-  private extractInterfaces(code: string, _language: ProgrammingLanguage): any[] {
-    // Simplified interface extraction
-    const interfaceRegex = /interface\s+([A-Za-z_$][A-Za-z0-9_$]*)/g;
-    const interfaces: any[] = [];
-    let match;
-    while ((match = interfaceRegex.exec(code)) !== null) {
-      interfaces.push({
-        name: match[1],
-        extends: [],
-        properties: [],
-        methods: [],
-      });
-    }
-    return interfaces;
-  }
-
-  private processAIResponse(aiResponse: any, request: CodeGenerationRequest): GeneratedFile[] {
-    if (aiResponse.files) {
-      return aiResponse.files.map((file: any) => ({
-        path: file.path || this.generateFilePath(request),
-        content: file.content,
-        language: request.language,
-        type: file.type || request.templateType,
-        size: file.content.length,
-        checksum: this.calculateChecksum(file.content),
-        dependencies: this.extractDependencies(file.content),
-        imports: this.extractImports(file.content, request.language),
-        exports: this.extractExports(file.content, request.language),
-        functions: this.extractFunctions(file.content, request.language),
-        classes: this.extractClasses(file.content, request.language),
-        interfaces: this.extractInterfaces(file.content, request.language),
-      }));
-    } else {
-      return [{
-        path: this.generateFilePath(request),
-        content: aiResponse.code,
-        language: request.language,
-        type: request.templateType,
-        size: aiResponse.code.length,
-        checksum: this.calculateChecksum(aiResponse.code),
-        dependencies: this.extractDependencies(aiResponse.code),
-        imports: this.extractImports(aiResponse.code, request.language),
-        exports: this.extractExports(aiResponse.code, request.language),
-        functions: this.extractFunctions(aiResponse.code, request.language),
-        classes: this.extractClasses(aiResponse.code, request.language),
-        interfaces: this.extractInterfaces(aiResponse.code, request.language),
-      }];
-    }
-  }
-
   private findMatchingPatterns(patterns: any[], _requirements: any[]): any[] {
     // Simplified pattern matching logic
     return patterns.filter(pattern => pattern.confidence > 0.7);
-  }
-
-  private async generateFromDetectedPatterns(patterns: any[], request: CodeGenerationRequest): Promise<GeneratedFile[]> {
-    // Simplified pattern-based generation
-    const code = `// Generated from patterns: ${patterns.map(p => p.name).join(', ')}`;
-    return [{
-      path: this.generateFilePath(request),
-      content: code,
-      language: request.language,
-      type: request.templateType,
-      size: code.length,
-      checksum: this.calculateChecksum(code),
-      dependencies: [],
-      imports: [],
-      exports: [],
-      functions: [],
-      classes: [],
-      interfaces: [],
-    }];
   }
 
   private async waitForSlot(semaphore: number[], index: number): Promise<void> {
@@ -1063,5 +589,10 @@ export class CodeGenerationService {
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
     };
+  }
+
+  private average(values: (number | undefined)[]): number {
+    const validValues = values.filter((v): v is number => v !== undefined);
+    return validValues.length > 0 ? validValues.reduce((sum, v) => sum + v, 0) / validValues.length : 0;
   }
 }

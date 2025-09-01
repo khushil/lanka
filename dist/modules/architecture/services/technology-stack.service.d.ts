@@ -1,7 +1,15 @@
 import { Neo4jService } from '../../../core/database/neo4j';
 import { TechnologyStack, TechnologyLayer, Technology, CompatibilityMatrix, PerformanceMetrics, CostEstimate } from '../types/architecture.types';
+/**
+ * Refactored TechnologyStackService - Core orchestration logic only
+ * Analysis, recommendation, and cost calculation logic extracted to separate services
+ * Now maintains single responsibility principle with < 300 lines
+ */
 export declare class TechnologyStackService {
     private neo4j;
+    private analysisService;
+    private recommendationService;
+    private costCalculationService;
     constructor(neo4j: Neo4jService);
     createTechnologyStack(input: {
         name: string;
@@ -61,23 +69,6 @@ export declare class TechnologyStackService {
         minMaturity?: string;
         requiredFeatures?: string[];
     }): Promise<Technology[]>;
-    private analyzeRequirements;
-    private findCandidateStacks;
-    private scoreAndRankStacks;
-    getTechnologyStackById(stackId: string): Promise<TechnologyStack | null>;
-    private checkVersionCompatibility;
-    private getHistoricalPerformance;
-    private calculateWorkloadFactor;
-    private predictScalability;
-    private predictReliability;
-    private storePrediction;
-    private calculateLicensingCosts;
-    private calculatePersonnelCosts;
-    private calculateTrainingCosts;
-    private calculateOpportunityCost;
-    private generateCostOptimizationRecommendations;
-    private searchAlternatives;
-    private scoreAlternative;
     getTechnologyStacks(filters: {
         teamExpertise?: number;
         performanceRequirements?: string;
@@ -94,6 +85,7 @@ export declare class TechnologyStackService {
         teamExpertise?: number;
     }): Promise<TechnologyStack | null>;
     recommendTechnologies(requirementIds: string[], patternIds: string[], constraints: string[]): Promise<any[]>;
+    getTechnologyStackById(stackId: string): Promise<TechnologyStack | null>;
     private mapToTechnologyStack;
 }
 //# sourceMappingURL=technology-stack.service.d.ts.map

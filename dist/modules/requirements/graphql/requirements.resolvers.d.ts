@@ -50,10 +50,11 @@ export declare const requirementsResolvers: {
         approveRequirement: (_: any, { id }: {
             id: string;
         }, context: any) => Promise<any>;
-        linkRequirements: (_: any, { requirement1Id, requirement2Id, relationship, }: {
+        linkRequirements: (_: any, { requirement1Id, requirement2Id, relationship, properties, }: {
             requirement1Id: string;
             requirement2Id: string;
             relationship: string;
+            properties?: Record<string, any>;
         }, context: any) => Promise<boolean>;
         resolveConflict: (_: any, { conflictId, resolution }: {
             conflictId: string;

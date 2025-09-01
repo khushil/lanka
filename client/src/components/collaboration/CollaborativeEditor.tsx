@@ -170,6 +170,28 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     onChange(newValue);
   }, [session, isConnected, sendEdit, onChange, user]);
 
+  // Undo/Redo state management
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length > 0) {
+      const previousValue = undoStack[undoStack.length - 1];
+      setRedoStack(prev => [...prev, value]);
+      setUndoStack(prev => prev.slice(0, -1));
+      onChange(previousValue);
+    }
+  }, [undoStack, value, onChange]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length > 0) {
+      const nextValue = redoStack[redoStack.length - 1];
+      setUndoStack(prev => [...prev, value]);
+      setRedoStack(prev => prev.slice(0, -1));
+      onChange(nextValue);
+    }
+  }, [redoStack, value, onChange]);
+
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     // Handle keyboard shortcuts
     if (event.ctrlKey || event.metaKey) {
@@ -184,11 +206,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           if (event.shiftKey) {
             // Redo functionality
             event.preventDefault();
-            // TODO: Implement redo
+            handleRedo();
           } else {
             // Undo functionality
             event.preventDefault();
-            // TODO: Implement undo
+            handleUndo();
           }
           break;
       }
@@ -197,7 +219,17 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
   const toggleLock = useCallback(() => {
     setIsLocked(!isLocked);
-    // TODO: Implement document locking mechanism
+    // Send lock status to other users via collaboration service
+    if (session && isConnected) {
+      sendEdit({
+        id: `lock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        userId: user?.id || 'anonymous',
+        type: 'lock',
+        position: 0,
+        content: isLocked ? 'unlocked' : 'locked',
+        timestamp: new Date()
+      });
+    }
   }, [isLocked]);
 
   const handleConflictResolution = useCallback((resolution: ConflictResolution) => {
@@ -205,7 +237,32 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     const operation = conflicts.find(c => c.id === resolution.operationId);
     if (operation && resolution.resolution === 'accept') {
       // Apply the operation
-      // TODO: Implement operation application
+      // Apply the accepted operation to the current value
+      switch (operation.type) {
+        case 'insert':
+          if (operation.content && operation.position !== undefined) {
+            const newValue = value.slice(0, operation.position) + 
+                           operation.content + 
+                           value.slice(operation.position);
+            onChange(newValue);
+          }
+          break;
+        case 'delete':
+          if (operation.position !== undefined && operation.length) {
+            const newValue = value.slice(0, operation.position) + 
+                           value.slice(operation.position + operation.length);
+            onChange(newValue);
+          }
+          break;
+        case 'replace':
+          if (operation.content && operation.position !== undefined && operation.length) {
+            const newValue = value.slice(0, operation.position) + 
+                           operation.content + 
+                           value.slice(operation.position + operation.length);
+            onChange(newValue);
+          }
+          break;
+      }
     }
     
     // Remove resolved conflict

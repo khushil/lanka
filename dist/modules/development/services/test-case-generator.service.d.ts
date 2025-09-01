@@ -5,8 +5,7 @@
 import { Neo4jService } from '../../../core/database/neo4j';
 import { TestGenerationRequest, TestGenerationResponse, TestCase, TestCaseType, TestFramework } from '../types/development.types';
 export declare class TestCaseGeneratorService {
-    private neo4j;
-    constructor(neo4j: Neo4jService);
+    constructor(_neo4j: Neo4jService);
     generateFromSourceCode(request: TestGenerationRequest): Promise<TestGenerationResponse>;
     generateFromRequirements(requirements: string[], framework: TestFramework, testType: TestCaseType): Promise<TestGenerationResponse>;
     generateEdgeCases(sourceCode: string, language: string): Promise<TestCase[]>;

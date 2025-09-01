@@ -1,0 +1,342 @@
+name: Emergency Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: 'production'
+      rollback_to:
+        description: 'Version to rollback to (empty for previous)'
+        required: false
+        type: string
+      restore_database:
+        description: 'Restore database from backup'
+        required: false
+        default: false
+        type: boolean
+      reason:
+        description: 'Rollback reason'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate-rollback:
+    name: Validate Rollback Request
+    runs-on: ubuntu-latest
+    outputs:
+      target_version: ${{ steps.validation.outputs.target_version }}
+      backup_name: ${{ steps.validation.outputs.backup_name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          else
+            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          fi
+          chmod 600 $HOME/.kube/config
+
+      - name: Validate rollback target
+        id: validation
+        run: |
+          NAMESPACE=${{ github.event.inputs.environment }}
+          
+          if [ "${{ github.event.inputs.rollback_to }}" != "" ]; then
+            TARGET_VERSION="${{ github.event.inputs.rollback_to }}"
+          else
+            # Find previous deployment
+            CURRENT_COLOR=$(kubectl get service lanka-api -n $NAMESPACE -o jsonpath='{.spec.selector.color}' || echo "blue")
+            PREVIOUS_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+            TARGET_VERSION=$(kubectl get deployment lanka-api-$PREVIOUS_COLOR -n $NAMESPACE -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/version}' || echo "unknown")
+          fi
+          
+          echo "target_version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+          echo "Target rollback version: $TARGET_VERSION"
+          
+          if [ "${{ github.event.inputs.restore_database }}" = "true" ]; then
+            # Find latest backup
+            BACKUP_NAME=$(kubectl get jobs -n $NAMESPACE -l app=backup --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
+            echo "backup_name=$BACKUP_NAME" >> $GITHUB_OUTPUT
+            echo "Database backup to restore: $BACKUP_NAME"
+          fi
+
+      - name: Create rollback issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Emergency Rollback: ${{ github.event.inputs.environment }} to ${{ steps.validation.outputs.target_version }}`,
+              body: `
+              ## Rollback Details
+              
+              **Environment:** ${{ github.event.inputs.environment }}
+              **Target Version:** ${{ steps.validation.outputs.target_version }}
+              **Reason:** ${{ github.event.inputs.reason }}
+              **Initiated By:** @${{ github.actor }}
+              **Restore Database:** ${{ github.event.inputs.restore_database }}
+              
+              ## Actions Taken
+              - [ ] Traffic switched to previous version
+              - [ ] Database restored (if requested)
+              - [ ] Health checks passed
+              - [ ] Incident response notified
+              
+              **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              `,
+              labels: ['incident', 'rollback', '${{ github.event.inputs.environment }}']
+            });
+            
+            core.setOutput('issue_number', issue.data.number);
+
+  execute-rollback:
+    name: Execute Rollback
+    runs-on: ubuntu-latest
+    needs: validate-rollback
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    concurrency:
+      group: ${{ github.event.inputs.environment }}-rollback
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          else
+            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          fi
+          chmod 600 $HOME/.kube/config
+
+      - name: Create pre-rollback snapshot
+        run: |
+          NAMESPACE=${{ github.event.inputs.environment }}
+          SNAPSHOT_NAME="pre-rollback-$(date +%Y%m%d-%H%M%S)"
+          
+          # Create backup job
+          kubectl create job --from=cronjob/db-backup backup-$SNAPSHOT_NAME -n $NAMESPACE
+          kubectl wait --for=condition=complete --timeout=600s job/backup-$SNAPSHOT_NAME -n $NAMESPACE
+          
+          # Save current state
+          kubectl get all -n $NAMESPACE -o yaml > current-state-$SNAPSHOT_NAME.yaml
+          
+          echo "Pre-rollback snapshot created: $SNAPSHOT_NAME"
+
+      - name: Restore database
+        if: github.event.inputs.restore_database == 'true'
+        run: |
+          NAMESPACE=${{ github.event.inputs.environment }}
+          BACKUP_NAME=${{ needs.validate-rollback.outputs.backup_name }}
+          
+          if [ "$BACKUP_NAME" != "" ]; then
+            echo "Restoring database from backup: $BACKUP_NAME"
+            kubectl create job --from=job/$BACKUP_NAME restore-rollback-$(date +%s) -n $NAMESPACE
+            kubectl wait --for=condition=complete --timeout=600s job/restore-rollback-$(date +%s) -n $NAMESPACE
+          fi
+
+      - name: Execute traffic rollback
+        id: rollback
+        run: |
+          NAMESPACE=${{ github.event.inputs.environment }}
+          
+          # Get current traffic routing
+          CURRENT_COLOR=$(kubectl get service lanka-api -n $NAMESPACE -o jsonpath='{.spec.selector.color}')
+          ROLLBACK_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+          
+          echo "Current color: $CURRENT_COLOR"
+          echo "Rolling back to color: $ROLLBACK_COLOR"
+          
+          # Check if rollback target exists and is healthy
+          kubectl get deployment lanka-api-$ROLLBACK_COLOR -n $NAMESPACE
+          
+          # Scale up rollback target if needed
+          REPLICAS=$(kubectl get deployment lanka-api-$ROLLBACK_COLOR -n $NAMESPACE -o jsonpath='{.spec.replicas}')
+          if [ "$REPLICAS" = "0" ]; then
+            kubectl scale deployment lanka-api-$ROLLBACK_COLOR --replicas=3 -n $NAMESPACE
+            kubectl rollout status deployment/lanka-api-$ROLLBACK_COLOR -n $NAMESPACE --timeout=600s
+          fi
+          
+          # Switch traffic
+          kubectl patch service lanka-api -n $NAMESPACE -p "{\"spec\":{\"selector\":{\"color\":\"$ROLLBACK_COLOR\"}}}"
+          
+          # Wait for traffic switch
+          sleep 30
+          
+          echo "rollback_color=$ROLLBACK_COLOR" >> $GITHUB_OUTPUT
+          echo "current_color=$CURRENT_COLOR" >> $GITHUB_OUTPUT
+
+      - name: Health check after rollback
+        run: |
+          NAMESPACE=${{ github.event.inputs.environment }}
+          
+          # Basic health check
+          if [ "$NAMESPACE" = "production" ]; then
+            BASE_URL="https://lanka.com"
+          else
+            BASE_URL="https://staging.lanka.com"
+          fi
+          
+          # Wait for health endpoint
+          for i in {1..30}; do
+            if curl -f $BASE_URL/health > /dev/null 2>&1; then
+              echo "Health check passed"
+              break
+            fi
+            echo "Health check attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          
+          # Run smoke tests
+          kubectl run rollback-smoke-test-$(date +%s) \
+            --image=curlimages/curl:latest \
+            --restart=Never \
+            --rm -i \
+            --namespace=$NAMESPACE \
+            -- curl -f $BASE_URL/api/health
+
+      - name: Scale down failed deployment
+        run: |
+          NAMESPACE=${{ github.event.inputs.environment }}
+          FAILED_COLOR=${{ steps.rollback.outputs.current_color }}
+          
+          # Scale down failed deployment
+          kubectl scale deployment lanka-api-$FAILED_COLOR --replicas=0 -n $NAMESPACE
+          
+          # Add failure annotation
+          kubectl annotate deployment lanka-api-$FAILED_COLOR \
+            deployment.kubernetes.io/rollback-reason="${{ github.event.inputs.reason }}" \
+            deployment.kubernetes.io/rollback-timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -n $NAMESPACE
+
+      - name: Update monitoring and alerts
+        run: |
+          # Trigger alert manager to acknowledge rollback
+          curl -X POST "${{ secrets.ALERTMANAGER_URL }}/api/v1/alerts" \
+            -H "Content-Type: application/json" \
+            -d '[{
+              "labels": {
+                "alertname": "RollbackExecuted",
+                "environment": "${{ github.event.inputs.environment }}",
+                "version": "${{ needs.validate-rollback.outputs.target_version }}",
+                "reason": "${{ github.event.inputs.reason }}"
+              },
+              "annotations": {
+                "summary": "Rollback executed for ${{ github.event.inputs.environment }}",
+                "description": "Emergency rollback completed successfully"
+              }
+            }]' || true
+
+      - name: Notify incident response
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#incident-response'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          custom_payload: |
+            {
+              "text": "🔄 Emergency Rollback Completed",
+              "attachments": [{
+                "color": "warning",
+                "fields": [{
+                  "title": "Environment",
+                  "value": "${{ github.event.inputs.environment }}",
+                  "short": true
+                }, {
+                  "title": "Rolled back to",
+                  "value": "${{ needs.validate-rollback.outputs.target_version }}",
+                  "short": true
+                }, {
+                  "title": "Reason",
+                  "value": "${{ github.event.inputs.reason }}",
+                  "short": false
+                }, {
+                  "title": "Initiated by",
+                  "value": "${{ github.actor }}",
+                  "short": true
+                }, {
+                  "title": "Database Restored",
+                  "value": "${{ github.event.inputs.restore_database }}",
+                  "short": true
+                }]
+              }]
+            }
+
+  post-rollback-validation:
+    name: Post-Rollback Validation
+    runs-on: ubuntu-latest
+    needs: [validate-rollback, execute-rollback]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run post-rollback tests
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            BASE_URL="https://lanka.com"
+          else
+            BASE_URL="https://staging.lanka.com"
+          fi
+          
+          npm run test:smoke -- --baseUrl=$BASE_URL
+          npm run test:api -- --baseUrl=$BASE_URL
+        env:
+          TEST_TIMEOUT: 60000
+
+      - name: Generate rollback report
+        run: |
+          cat > rollback-report.md << EOF
+          # Rollback Report
+          
+          **Date:** $(date)
+          **Environment:** ${{ github.event.inputs.environment }}
+          **Target Version:** ${{ needs.validate-rollback.outputs.target_version }}
+          **Reason:** ${{ github.event.inputs.reason }}
+          **Initiated By:** ${{ github.actor }}
+          **Database Restored:** ${{ github.event.inputs.restore_database }}
+          
+          ## Validation Results
+          - ✅ Traffic successfully switched
+          - ✅ Health checks passed
+          - ✅ Smoke tests passed
+          - ✅ API tests passed
+          
+          ## Next Steps
+          1. Monitor system stability
+          2. Investigate root cause
+          3. Plan forward fix
+          4. Update incident documentation
+          EOF
+
+      - name: Upload rollback report
+        uses: actions/upload-artifact@v3
+        with:
+          name: rollback-report-${{ github.event.inputs.environment }}
+          path: rollback-report.md

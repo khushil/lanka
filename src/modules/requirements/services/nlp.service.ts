@@ -1,5 +1,12 @@
 import { RequirementType, RequirementPriority } from '../types/requirement.types';
 import { logger } from '../../../core/logging/logger';
+import { 
+  ErrorWrapper, 
+  ErrorCode, 
+  technicalError, 
+  businessError,
+  withErrorHandling 
+} from '../../../core/errors';
 
 export interface RequirementAnalysis {
   type: RequirementType;
@@ -15,33 +22,62 @@ export interface RequirementAnalysis {
 
 export class NLPService {
   async analyzeRequirement(text: string): Promise<RequirementAnalysis> {
-    try {
-      // Simplified NLP analysis for initial implementation
-      // In production, this would use advanced NLP models
-      
-      const type = this.classifyRequirementType(text);
-      const priority = this.determinePriority(text);
-      const suggestedTitle = this.generateTitle(text);
-      const entities = this.extractEntities(text);
-      const keywords = this.extractKeywords(text);
-      const embedding = this.generateEmbedding(text);
-      const { completenessScore, qualityScore, suggestions } = this.assessQuality(text);
+    return withErrorHandling(
+      async () => {
+        // Validate input
+        if (!text || text.trim().length === 0) {
+          throw ErrorWrapper.validation(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            'Text is required for NLP analysis',
+            { fieldErrors: { text: ['Text cannot be empty'] } }
+          );
+        }
 
-      return {
-        type,
-        priority,
-        suggestedTitle,
-        entities,
-        keywords,
-        embedding,
-        completenessScore,
-        qualityScore,
-        suggestions,
-      };
-    } catch (error) {
-      logger.error('NLP analysis failed', error);
-      throw error;
-    }
+        if (text.length > 50000) {
+          throw ErrorWrapper.validation(
+            ErrorCode.OUT_OF_RANGE,
+            'Text exceeds maximum length for analysis',
+            { fieldErrors: { text: ['Text must be less than 50,000 characters'] } }
+          );
+        }
+
+        logger.debug('Starting NLP analysis', { textLength: text.length });
+        
+        // Simplified NLP analysis for initial implementation
+        // In production, this would use advanced NLP models
+        
+        const type = this.classifyRequirementType(text);
+        const priority = this.determinePriority(text);
+        const suggestedTitle = this.generateTitle(text);
+        const entities = this.extractEntities(text);
+        const keywords = this.extractKeywords(text);
+        const embedding = this.generateEmbedding(text);
+        const { completenessScore, qualityScore, suggestions } = this.assessQuality(text);
+
+        logger.debug('NLP analysis completed', { 
+          type, 
+          priority, 
+          completenessScore, 
+          qualityScore 
+        });
+
+        return {
+          type,
+          priority,
+          suggestedTitle,
+          entities,
+          keywords,
+          embedding,
+          completenessScore,
+          qualityScore,
+          suggestions,
+        };
+      },
+      { 
+        operation: 'nlp_analysis',
+        metadata: { textLength: text?.length || 0 }
+      }
+    )();
   }
 
   private classifyRequirementType(text: string): RequirementType {

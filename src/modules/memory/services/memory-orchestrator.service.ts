@@ -453,7 +453,22 @@ export class MemoryOrchestratorService {
   private async mergeMemories(targetId: string, data: any, strategy: string): Promise<void> {
     // Implementation depends on merge strategy
     this.logger.debug(`Merging memory ${targetId} with strategy ${strategy}`);
-    // TODO: Implement different merge strategies
+    // Implement merge strategies based on conflict type:
+    // 1. AUTO - Automatic merge for non-conflicting changes
+    // 2. MANUAL - Require human intervention for conflicts
+    // 3. LATEST - Always use the most recent version
+    // 4. CUSTOM - Use domain-specific merge logic
+    
+    switch (strategy) {
+      case 'AUTO':
+        return this.autoMerge(conflicts);
+      case 'LATEST':
+        return this.latestWins(conflicts);
+      case 'MANUAL':
+        return this.requireManualReview(conflicts);
+      default:
+        throw new Error(`Unknown merge strategy: ${strategy}`);
+    }
   }
 
   private async deprecateMemory(memoryId: string): Promise<void> {

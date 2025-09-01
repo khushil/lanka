@@ -1,0 +1,366 @@
+# Docker Compose Configuration for Redis Caching Layer
+# Supports both single instance and cluster configurations
+
+version: '3.8'
+
+services:
+  # Redis Single Instance (Development)
+  redis-single:
+    image: redis:7-alpine
+    container_name: lanka-redis-single
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis-single-data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    networks:
+      - lanka-cache
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - single
+      - development
+
+  # Redis Cluster (Production)
+  redis-cluster-1:
+    image: redis:7-alpine
+    container_name: lanka-redis-cluster-1
+    restart: unless-stopped
+    ports:
+      - "7001:6379"
+      - "17001:16379"
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes-6379.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cluster-1-data:/data
+    networks:
+      - lanka-cache
+    profiles:
+      - cluster
+      - production
+
+  redis-cluster-2:
+    image: redis:7-alpine
+    container_name: lanka-redis-cluster-2
+    restart: unless-stopped
+    ports:
+      - "7002:6379"
+      - "17002:16379"
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes-6379.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cluster-2-data:/data
+    networks:
+      - lanka-cache
+    profiles:
+      - cluster
+      - production
+
+  redis-cluster-3:
+    image: redis:7-alpine
+    container_name: lanka-redis-cluster-3
+    restart: unless-stopped
+    ports:
+      - "7003:6379"
+      - "17003:16379"
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes-6379.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cluster-3-data:/data
+    networks:
+      - lanka-cache
+    profiles:
+      - cluster
+      - production
+
+  redis-cluster-4:
+    image: redis:7-alpine
+    container_name: lanka-redis-cluster-4
+    restart: unless-stopped
+    ports:
+      - "7004:6379"
+      - "17004:16379"
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes-6379.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cluster-4-data:/data
+    networks:
+      - lanka-cache
+    profiles:
+      - cluster
+      - production
+
+  redis-cluster-5:
+    image: redis:7-alpine
+    container_name: lanka-redis-cluster-5
+    restart: unless-stopped
+    ports:
+      - "7005:6379"
+      - "17005:16379"
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes-6379.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cluster-5-data:/data
+    networks:
+      - lanka-cache
+    profiles:
+      - cluster
+      - production
+
+  redis-cluster-6:
+    image: redis:7-alpine
+    container_name: lanka-redis-cluster-6
+    restart: unless-stopped
+    ports:
+      - "7006:6379"
+      - "17006:16379"
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes-6379.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cluster-6-data:/data
+    networks:
+      - lanka-cache
+    profiles:
+      - cluster
+      - production
+
+  # Redis Cluster Initialization
+  redis-cluster-init:
+    image: redis:7-alpine
+    container_name: lanka-redis-cluster-init
+    depends_on:
+      - redis-cluster-1
+      - redis-cluster-2
+      - redis-cluster-3
+      - redis-cluster-4
+      - redis-cluster-5
+      - redis-cluster-6
+    command: >
+      sh -c "
+        sleep 30 &&
+        redis-cli --cluster create
+        redis-cluster-1:6379
+        redis-cluster-2:6379
+        redis-cluster-3:6379
+        redis-cluster-4:6379
+        redis-cluster-5:6379
+        redis-cluster-6:6379
+        --cluster-replicas 1
+        --cluster-yes
+      "
+    networks:
+      - lanka-cache
+    profiles:
+      - cluster
+      - production
+
+  # Redis Sentinel (High Availability)
+  redis-master:
+    image: redis:7-alpine
+    container_name: lanka-redis-master
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-master-data:/data
+    networks:
+      - lanka-cache
+    profiles:
+      - sentinel
+      - high-availability
+
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: lanka-redis-sentinel-1
+    restart: unless-stopped
+    ports:
+      - "26379:26379"
+    depends_on:
+      - redis-master
+    command: >
+      sh -c "
+        echo 'port 26379' > /tmp/sentinel.conf &&
+        echo 'sentinel monitor mymaster redis-master 6379 2' >> /tmp/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+        echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+        redis-sentinel /tmp/sentinel.conf
+      "
+    networks:
+      - lanka-cache
+    profiles:
+      - sentinel
+      - high-availability
+
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: lanka-redis-sentinel-2
+    restart: unless-stopped
+    ports:
+      - "26380:26379"
+    depends_on:
+      - redis-master
+    command: >
+      sh -c "
+        echo 'port 26379' > /tmp/sentinel.conf &&
+        echo 'sentinel monitor mymaster redis-master 6379 2' >> /tmp/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+        echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+        redis-sentinel /tmp/sentinel.conf
+      "
+    networks:
+      - lanka-cache
+    profiles:
+      - sentinel
+      - high-availability
+
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: lanka-redis-sentinel-3
+    restart: unless-stopped
+    ports:
+      - "26381:26379"
+    depends_on:
+      - redis-master
+    command: >
+      sh -c "
+        echo 'port 26379' > /tmp/sentinel.conf &&
+        echo 'sentinel monitor mymaster redis-master 6379 2' >> /tmp/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+        echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+        redis-sentinel /tmp/sentinel.conf
+      "
+    networks:
+      - lanka-cache
+    profiles:
+      - sentinel
+      - high-availability
+
+  # Redis Insight (GUI for monitoring)
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: lanka-redis-insight
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - redis-insight-data:/db
+    networks:
+      - lanka-cache
+    environment:
+      - RIPORT=8001
+    profiles:
+      - monitoring
+      - development
+
+  # Cache Metrics Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: lanka-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-single:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    networks:
+      - lanka-cache
+    profiles:
+      - monitoring
+      - metrics
+
+volumes:
+  redis-single-data:
+    driver: local
+  redis-cluster-1-data:
+    driver: local
+  redis-cluster-2-data:
+    driver: local
+  redis-cluster-3-data:
+    driver: local
+  redis-cluster-4-data:
+    driver: local
+  redis-cluster-5-data:
+    driver: local
+  redis-cluster-6-data:
+    driver: local
+  redis-master-data:
+    driver: local
+  redis-insight-data:
+    driver: local
+
+networks:
+  lanka-cache:
+    driver: bridge
+    name: lanka-cache-network

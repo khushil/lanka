@@ -1,0 +1,209 @@
+# Lanka Platform Alert Rules
+groups:
+  - name: lanka-platform.alerts
+    interval: 30s
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: lanka:http_error_rate_5m > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: lanka-platform
+        annotations:
+          summary: "High error rate detected on Lanka Platform"
+          description: "Error rate is {{ $value | humanizePercentage }} for more than 2 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/high-error-rate"
+
+      # Critical Error Rate Alert
+      - alert: CriticalErrorRate
+        expr: lanka:http_error_rate_5m > 0.10
+        for: 1m
+        labels:
+          severity: critical
+          service: lanka-platform
+        annotations:
+          summary: "Critical error rate on Lanka Platform"
+          description: "Error rate is {{ $value | humanizePercentage }} for more than 1 minute"
+          runbook_url: "https://docs.lanka.platform/runbooks/critical-error-rate"
+
+      # High Response Time Alert
+      - alert: HighResponseTime
+        expr: lanka:response_time_95th_percentile > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: lanka-platform
+        annotations:
+          summary: "High response time on Lanka Platform"
+          description: "95th percentile response time is {{ $value }}s for more than 5 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/high-response-time"
+
+      # Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: lanka:memory_usage_percentage > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: lanka-platform
+        annotations:
+          summary: "High memory usage on Lanka Platform"
+          description: "Memory usage is {{ $value }}% for more than 3 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/high-memory-usage"
+
+      # Critical Memory Usage Alert
+      - alert: CriticalMemoryUsage
+        expr: lanka:memory_usage_percentage > 90
+        for: 1m
+        labels:
+          severity: critical
+          service: lanka-platform
+        annotations:
+          summary: "Critical memory usage on Lanka Platform"
+          description: "Memory usage is {{ $value }}% for more than 1 minute"
+          runbook_url: "https://docs.lanka.platform/runbooks/critical-memory-usage"
+
+      # Memory Leak Detection
+      - alert: MemoryLeakDetected
+        expr: increase(lanka_memory_leaks_detected_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: lanka-platform
+        annotations:
+          summary: "Memory leak detected on Lanka Platform"
+          description: "{{ $value }} memory leaks detected in the last 10 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/memory-leak"
+
+      # Database Query Performance Alert
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(lanka_neo4j_query_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: lanka-platform
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value }}s for more than 3 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/slow-queries"
+
+      # System Health Score Alert
+      - alert: LowSystemHealth
+        expr: lanka_system_health_score < 0.7
+        for: 5m
+        labels:
+          severity: warning
+          service: lanka-platform
+        annotations:
+          summary: "Low system health score"
+          description: "System health score is {{ $value }} for more than 5 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/low-health"
+
+      # Service Down Alert
+      - alert: ServiceDown
+        expr: up{job="lanka-platform"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: lanka-platform
+        annotations:
+          summary: "Lanka Platform service is down"
+          description: "Lanka Platform has been down for more than 1 minute"
+          runbook_url: "https://docs.lanka.platform/runbooks/service-down"
+
+      # Endpoint Availability Alert
+      - alert: EndpointDown
+        expr: probe_success{job="blackbox"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: lanka-platform
+        annotations:
+          summary: "Endpoint {{ $labels.instance }} is down"
+          description: "Endpoint {{ $labels.instance }} has been down for more than 2 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/endpoint-down"
+
+      # High Request Rate Alert
+      - alert: HighRequestRate
+        expr: sum(rate(lanka_http_requests_total[5m])) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: lanka-platform
+        annotations:
+          summary: "High request rate detected"
+          description: "Request rate is {{ $value }} requests/second for more than 5 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/high-request-rate"
+
+      # Garbage Collection Performance
+      - alert: HighGCDuration
+        expr: histogram_quantile(0.95, rate(lanka_gc_duration_seconds_bucket[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: lanka-platform
+          component: gc
+        annotations:
+          summary: "High garbage collection duration"
+          description: "95th percentile GC duration is {{ $value }}s for more than 3 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/high-gc-duration"
+
+      # SLA Compliance Alert
+      - alert: SLAViolation
+        expr: lanka_sla_compliance_percentage < 95
+        for: 5m
+        labels:
+          severity: warning
+          service: lanka-platform
+        annotations:
+          summary: "SLA compliance below threshold"
+          description: "SLA compliance for {{ $labels.sla_type }} is {{ $value }}% for more than 5 minutes"
+          runbook_url: "https://docs.lanka.platform/runbooks/sla-violation"
+
+  - name: infrastructure.alerts
+    interval: 30s
+    rules:
+      # Node Exporter Down
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Node Exporter is down"
+          description: "Node Exporter has been down for more than 2 minutes"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 3m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% for more than 3 minutes"
+
+      # High Disk Usage
+      - alert: HighDiskUsage
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Disk usage is above 80% for {{ $labels.mountpoint }} on {{ $labels.instance }}"
+
+      # Container Down Alert
+      - alert: ContainerDown
+        expr: absent(container_last_seen{name!=""})
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Container {{ $labels.name }} is down"
+          description: "Container {{ $labels.name }} has been down for more than 2 minutes"

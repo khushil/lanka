@@ -1,0 +1,131 @@
+# Prometheus Configuration for Lanka Platform
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'lanka-platform'
+    environment: '${ENVIRONMENT:-development}'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "rules/*.yml"
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Lanka Platform Application
+  - job_name: 'lanka-platform'
+    static_configs:
+      - targets: ['host.docker.internal:4000']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Node Exporter (System metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # cAdvisor (Container metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # Blackbox Exporter (Endpoint monitoring)
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - 'http://host.docker.internal:4000/health'
+        - 'http://host.docker.internal:4000/api/memory/stats'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Neo4j Metrics (if available)
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['host.docker.internal:2004']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    honor_labels: true
+
+  # Redis Metrics (if available)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['host.docker.internal:6379']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Elasticsearch Metrics
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+    scrape_interval: 30s
+    metrics_path: /_prometheus/metrics
+
+  # Grafana Metrics
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Jaeger Metrics
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger-all-in-one:14269']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Loki Metrics
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+# Recording rules for performance optimization
+recording_rules:
+  - record: lanka:http_request_rate_5m
+    expr: rate(lanka_http_requests_total[5m])
+    labels:
+      job: "lanka-platform"
+
+  - record: lanka:http_error_rate_5m
+    expr: rate(lanka_http_requests_total{status_code=~"4..|5.."}[5m]) / rate(lanka_http_requests_total[5m])
+    labels:
+      job: "lanka-platform"
+
+  - record: lanka:memory_usage_percentage
+    expr: (lanka_memory_usage_bytes{type="heap_used"} / lanka_memory_usage_bytes{type="heap_total"}) * 100
+    labels:
+      job: "lanka-platform"
+
+  - record: lanka:response_time_95th_percentile
+    expr: histogram_quantile(0.95, rate(lanka_http_request_duration_seconds_bucket[5m]))
+    labels:
+      job: "lanka-platform"

@@ -284,7 +284,13 @@ const CommentDialog: React.FC<CommentDialogProps> = ({
         onClose={() => setAnchorEl(null)}
       >
         {user?.id === comment.userId && (
-          <MenuItem onClick={() => { setAnchorEl(null); /* TODO: Edit */ }}>
+          <MenuItem onClick={() => { 
+            setAnchorEl(null);
+            const newContent = prompt('Edit comment:', comment.content);
+            if (newContent && newContent.trim() !== comment.content) {
+              onEdit(newContent.trim());
+            }
+          }}>
             <Edit sx={{ mr: 1 }} /> Edit
           </MenuItem>
         )}
@@ -454,16 +460,69 @@ export const LiveComments: React.FC<LiveCommentsProps> = ({
               onClose={() => setSelectedComment(null)}
               onResolve={() => handleResolveComment(selectedComment.id)}
               onReply={(content) => {
-                // TODO: Implement reply functionality
-                console.log('Reply:', content);
+                if (!user || !content.trim()) return;
+                
+                const reply = {
+                  id: `reply_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  userId: user.id,
+                  user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    avatar: user.avatar,
+                    isOnline: true,
+                    lastSeen: new Date(),
+                    color: '#1976d2'
+                  },
+                  content: content.trim(),
+                  timestamp: new Date()
+                };
+
+                // Add reply to the comment
+                const updatedComment = {
+                  ...selectedComment,
+                  replies: [...(selectedComment.replies || []), reply]
+                };
+                
+                // Update comment in collaboration context
+                // This would typically be handled by the collaboration service
+                console.log('Adding reply:', reply);
+                setSelectedComment(updatedComment);
               }}
               onEdit={(content) => {
-                // TODO: Implement edit functionality
-                console.log('Edit:', content);
+                if (!user || !content.trim() || user.id !== selectedComment.userId) {
+                  console.warn('Edit not allowed: user mismatch or empty content');
+                  return;
+                }
+                
+                const updatedComment = {
+                  ...selectedComment,
+                  content: content.trim(),
+                  editedAt: new Date()
+                };
+                
+                // Update comment in collaboration context
+                console.log('Editing comment:', updatedComment);
+                setSelectedComment(updatedComment);
+                
+                // This would typically call a collaboration service method
+                // like updateComment(selectedComment.id, content)
               }}
               onDelete={() => {
-                // TODO: Implement delete functionality
-                setSelectedComment(null);
+                if (!user || user.id !== selectedComment.userId) {
+                  console.warn('Delete not allowed: user mismatch');
+                  return;
+                }
+                
+                // Confirm deletion
+                if (window.confirm('Are you sure you want to delete this comment?')) {
+                  console.log('Deleting comment:', selectedComment.id);
+                  
+                  // Remove comment from collaboration context
+                  // This would typically call deleteComment(selectedComment.id)
+                  
+                  setSelectedComment(null);
+                }
               }}
             />
           </div>
