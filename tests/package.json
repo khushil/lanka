@@ -1,0 +1,29 @@
+{
+  "name": "@lanka/memory-system-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive test suite for LANKA Memory System",
+  "scripts": {
+    "test": "jest --projects unit integration performance bdd",
+    "test:unit": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration",
+    "test:performance": "jest --selectProjects performance",
+    "test:bdd": "jest --selectProjects bdd",
+    "test:watch": "jest --watch --selectProjects unit",
+    "test:coverage": "jest --coverage --selectProjects unit integration",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
+    "test:ci": "jest --ci --coverage --watchAll=false",
+    "lint:tests": "eslint . --ext .ts",
+    "typecheck:tests": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.9.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.2.2"
+  },
+  "jest": {
+    "extends": "./jest.config.js"
+  }
+}
