@@ -1,0 +1,48 @@
+{
+  "name": "security-analyzer",
+  "version": "1.0.0",
+  "description": "Advanced security analysis plugin for LANKA Memory System",
+  "author": "LANKA Security Team",
+  "license": "MIT",
+  "capabilities": [
+    "analyze",
+    "scan",
+    "suggest",
+    "validate"
+  ],
+  "hooks": [
+    "memory-ingestion",
+    "memory-stored",
+    "pre-search",
+    "post-search"
+  ],
+  "dependencies": [],
+  "requiredPermissions": [
+    "read-memory",
+    "write-memory",
+    "create-relationships",
+    "plugin-communication"
+  ],
+  "resourceLimits": {
+    "maxMemoryMB": 200,
+    "maxExecutionTimeMs": 10000,
+    "maxConcurrentOperations": 5
+  },
+  "configuration": {
+    "severityThreshold": {
+      "type": "string",
+      "default": "medium",
+      "description": "Minimum severity level for security alerts"
+    },
+    "scanDepth": {
+      "type": "number",
+      "default": 3,
+      "description": "Maximum depth for security pattern analysis"
+    },
+    "enableRealtimeScanning": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable real-time security scanning of memories"
+    }
+  }
+}

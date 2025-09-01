@@ -1,0 +1,60 @@
+{
+  "name": "pattern-detector",
+  "version": "1.1.0",
+  "description": "Intelligent pattern detection and learning plugin for LANKA Memory System",
+  "author": "LANKA AI Team",
+  "license": "MIT",
+  "capabilities": [
+    "detect",
+    "learn",
+    "classify",
+    "predict",
+    "evolve"
+  ],
+  "hooks": [
+    "memory-ingestion",
+    "memory-stored",
+    "post-search",
+    "memory-updated"
+  ],
+  "dependencies": [],
+  "requiredPermissions": [
+    "read-memory",
+    "write-memory",
+    "create-relationships",
+    "access-embeddings",
+    "plugin-communication"
+  ],
+  "resourceLimits": {
+    "maxMemoryMB": 300,
+    "maxExecutionTimeMs": 15000,
+    "maxConcurrentOperations": 8
+  },
+  "configuration": {
+    "patternThreshold": {
+      "type": "number",
+      "default": 0.75,
+      "description": "Minimum confidence threshold for pattern detection"
+    },
+    "learningRate": {
+      "type": "number",
+      "default": 0.1,
+      "description": "Learning rate for pattern evolution"
+    },
+    "maxPatterns": {
+      "type": "number",
+      "default": 10000,
+      "description": "Maximum number of patterns to maintain"
+    },
+    "enableEvolution": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable pattern evolution and learning"
+    },
+    "patternCategories": {
+      "type": "array",
+      "default": ["code", "architecture", "workflow", "problem-solving", "optimization"],
+      "description": "Categories of patterns to detect"
+    }
+  }
+}

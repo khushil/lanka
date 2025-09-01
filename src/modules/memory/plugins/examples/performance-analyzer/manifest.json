@@ -1,0 +1,61 @@
+{
+  "name": "performance-analyzer",
+  "version": "1.2.0",
+  "description": "Real-time performance monitoring and optimization plugin for LANKA Memory System",
+  "author": "LANKA Performance Team",
+  "license": "MIT",
+  "capabilities": [
+    "monitor",
+    "analyze",
+    "optimize",
+    "benchmark",
+    "profile"
+  ],
+  "hooks": [
+    "memory-ingestion",
+    "memory-retrieved",
+    "pre-search",
+    "post-search",
+    "graph-traversal",
+    "system-startup"
+  ],
+  "dependencies": [],
+  "requiredPermissions": [
+    "read-memory",
+    "write-memory",
+    "create-relationships",
+    "plugin-communication",
+    "system-events"
+  ],
+  "resourceLimits": {
+    "maxMemoryMB": 150,
+    "maxExecutionTimeMs": 5000,
+    "maxConcurrentOperations": 10
+  },
+  "configuration": {
+    "monitoringInterval": {
+      "type": "number",
+      "default": 60000,
+      "description": "Monitoring interval in milliseconds"
+    },
+    "performanceThresholds": {
+      "type": "object",
+      "default": {
+        "searchLatency": 1000,
+        "memoryIngestion": 500,
+        "graphTraversal": 2000
+      },
+      "description": "Performance thresholds for different operations"
+    },
+    "enableProfiling": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable detailed performance profiling"
+    },
+    "retainMetrics": {
+      "type": "number",
+      "default": 168,
+      "description": "Hours to retain performance metrics"
+    }
+  }
+}

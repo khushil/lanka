@@ -1,0 +1,42 @@
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "description": "A basic LANKA Memory System plugin template",
+  "author": "Your Name",
+  "license": "MIT",
+  "capabilities": [
+    "process",
+    "analyze"
+  ],
+  "hooks": [
+    "memory-ingestion",
+    "post-search"
+  ],
+  "dependencies": [],
+  "requiredPermissions": [
+    "read-memory",
+    "plugin-communication"
+  ],
+  "resourceLimits": {
+    "maxMemoryMB": 100,
+    "maxExecutionTimeMs": 5000,
+    "maxConcurrentOperations": 3
+  },
+  "configuration": {
+    "enableFeature": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the main plugin feature"
+    },
+    "threshold": {
+      "type": "number",
+      "default": 0.5,
+      "description": "Processing threshold (0.0-1.0)"
+    },
+    "outputFormat": {
+      "type": "string",
+      "default": "json",
+      "description": "Output format for results"
+    }
+  }
+}

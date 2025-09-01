@@ -1,0 +1,58 @@
+{
+  "name": "documentation-generator",
+  "version": "1.0.0",
+  "description": "Automated documentation generation plugin for LANKA Memory System",
+  "author": "LANKA Documentation Team",
+  "license": "MIT",
+  "capabilities": [
+    "generate",
+    "summarize",
+    "format",
+    "translate",
+    "validate"
+  ],
+  "hooks": [
+    "memory-stored",
+    "post-search",
+    "system-startup"
+  ],
+  "dependencies": [],
+  "requiredPermissions": [
+    "read-memory",
+    "write-memory",
+    "create-relationships",
+    "plugin-communication"
+  ],
+  "resourceLimits": {
+    "maxMemoryMB": 250,
+    "maxExecutionTimeMs": 20000,
+    "maxConcurrentOperations": 6
+  },
+  "configuration": {
+    "outputFormats": {
+      "type": "array",
+      "default": ["markdown", "html"],
+      "description": "Supported output formats for generated documentation"
+    },
+    "autoGenerate": {
+      "type": "boolean",
+      "default": true,
+      "description": "Automatically generate documentation for new memories"
+    },
+    "documentationTypes": {
+      "type": "array",
+      "default": ["api", "guide", "tutorial", "reference"],
+      "description": "Types of documentation to generate"
+    },
+    "templateDirectory": {
+      "type": "string",
+      "default": "./templates",
+      "description": "Directory containing documentation templates"
+    },
+    "qualityThreshold": {
+      "type": "number",
+      "default": 0.7,
+      "description": "Minimum quality score for generated documentation"
+    }
+  }
+}
